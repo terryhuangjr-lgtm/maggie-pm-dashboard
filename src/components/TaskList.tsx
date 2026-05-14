@@ -26,6 +26,9 @@ export function TaskList() {
   const [filter, setFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [updating, setUpdating] = useState<string | null>(null)
+  const [showCompleted, setShowCompleted] = useState(false)
+  const [completedTasks, setCompletedTasks] = useState<Task[]>([])
+  const [clearing, setClearing] = useState(false)
 
   const [showForm, setShowForm] = useState(false)
   const [editTask, setEditTask] = useState<any>(null)
@@ -52,6 +55,42 @@ export function TaskList() {
       console.error('Failed to load tasks:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadCompletedTasks() {
+    try {
+      const { data } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(50)
+      setCompletedTasks(data || [])
+    } catch (err) {
+      console.error('Failed to load completed tasks:', err)
+    }
+  }
+
+  async function clearCompleted() {
+    if (!confirm('Archive all completed tasks? They will be hidden from view.')) return
+    setClearing(true)
+    try {
+      const ids = completedTasks.map(t => t.id)
+      for (const id of ids) {
+        await supabase.from('tasks').update({ status: 'archived' }).eq('id', id)
+      }
+      await supabase.from('activity_log').insert({
+        action: 'Completed tasks cleared',
+        details: `Archived ${ids.length} completed tasks`,
+        source: 'manual'
+      })
+      setCompletedTasks([])
+      setShowCompleted(false)
+    } catch (err) {
+      console.error('Failed to clear completed tasks:', err)
+    } finally {
+      setClearing(false)
     }
   }
 
@@ -167,6 +206,57 @@ export function TaskList() {
           )
         })}
       </div>
+
+      {/* Completed tasks toggle */}
+      <div style={{ marginTop: 16 }}>
+        <button
+          onClick={() => { setShowCompleted(!showCompleted); if (!showCompleted) loadCompletedTasks() }}
+          className="filter-btn"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+        >
+          <CheckCircle size={14} />
+          {showCompleted ? 'Hide' : 'Show'} recently completed
+        </button>
+      </div>
+
+      {showCompleted && (
+        <div className="card" style={{ marginTop: 8 }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontSize: 14, margin: 0 }}>Completed Tasks</h3>
+            {completedTasks.length > 0 && (
+              <button
+                onClick={clearCompleted}
+                disabled={clearing}
+                className="filter-btn"
+                style={{ fontSize: 12, color: 'var(--red)' }}
+              >
+                {clearing ? 'Archiving...' : 'Clear all'}
+              </button>
+            )}
+          </div>
+          <div className="card-body">
+            {completedTasks.length === 0 ? (
+              <div className="empty-state" style={{ padding: '16px 0' }}>
+                <CheckCircle size={20} /> <p>No completed tasks</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, opacity: 0.7 }}>
+                {completedTasks.map(t => (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                    <span style={{ color: 'var(--green)' }}>✓</span>
+                    <span style={{ textDecoration: 'line-through' }}>{t.title}</span>
+                    {t.completed_at && (
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 'auto' }}>
+                        {new Date(t.completed_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <Modal open={showForm} onClose={() => { setShowForm(false); setEditTask(null) }}
         title={editTask ? 'Edit Task' : 'New Task'} width="560px">
