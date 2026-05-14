@@ -103,7 +103,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
     <div>
       <div className="page-header">
         <h1>Overview Dashboard</h1>
-        <p>Maggie's Property Management — 18 NYC Properties</p>
+        <p>Maggie Huang — Property Management Portfolio</p>
       </div>
 
       {/* Stats */}
@@ -145,7 +145,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
         {/* Lease Expirations */}
         <div className="card">
           <div className="card-header">
-            <h3>📋 Lease Expirations (Next 90 Days)</h3>
+            <h3>Lease Expirations — Next 90 Days</h3>
           </div>
           <div className="card-body">
             {data.upcomingExpirations.length === 0 ? (
@@ -191,7 +191,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
         {/* Rent Status */}
         <div className="card">
           <div className="card-header">
-            <h3>💰 Rent Status — This Month</h3>
+            <h3>Rent Status — This Month</h3>
           </div>
           <div className="card-body">
             <div className="stats-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', marginBottom: 16 }}>
@@ -232,7 +232,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
         {/* Open Tasks */}
         <div className="card">
           <div className="card-header">
-            <h3>📌 Open Tasks by Priority</h3>
+            <h3>Open Tasks by Priority</h3>
           </div>
           <div className="card-body">
             {data.openTasksList.length === 0 ? (
@@ -273,7 +273,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
         {/* Recent Activity */}
         <div className="card">
           <div className="card-header">
-            <h3>📝 Recent Activity</h3>
+            <h3>Recent Activity</h3>
           </div>
           <div className="card-body">
             {data.recentActivity.length === 0 ? (

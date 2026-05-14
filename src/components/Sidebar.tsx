@@ -16,8 +16,7 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <span>🏠</span>
-        <span>Maggie PM</span>
+        <span>Maggie Huang</span>
       </div>
       <nav className="sidebar-nav">
         {navItems.map(item => (
@@ -31,8 +30,8 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
           </button>
         ))}
       </nav>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '8px 12px' }}>
-        Maggie Huang Real Estate
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '8px 12px', fontFamily: 'var(--font-body)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+        Property Management
       </div>
     </aside>
   )

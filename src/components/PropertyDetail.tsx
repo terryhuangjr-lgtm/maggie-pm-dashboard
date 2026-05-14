@@ -126,7 +126,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
 
       <div className="detail-grid">
         <div className="card">
-          <div className="card-header"><h3>🏢 Property Info</h3></div>
+          <div className="card-header"><h3>Property Information</h3></div>
           <div className="card-body">
             <div className="detail-field">
               <div className="detail-field-label">Property Type</div>
@@ -150,7 +150,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         </div>
 
         <div className="card">
-          <div className="card-header"><h3>👤 Owner Info</h3></div>
+          <div className="card-header"><h3>Owner Information</h3></div>
           <div className="card-body">
             <div className="detail-field">
               <div className="detail-field-label">Name</div>
@@ -174,7 +174,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         {/* Tenant section */}
         <div className="card">
           <div className="card-header">
-            <h3>👥 Tenant</h3>
+            <h3> Tenant</h3>
             <button onClick={() => { setEditTenant(null); setShowTenantForm(true) }} style={{
               background: 'none', border: '1px solid var(--border)', borderRadius: 6,
               padding: '4px 8px', color: 'var(--text-secondary)', cursor: 'pointer',
@@ -237,7 +237,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         {/* Lease section */}
         <div className="card">
           <div className="card-header">
-            <h3>📄 Lease</h3>
+            <h3>Lease</h3>
             <button onClick={() => { setEditLease(null); setShowLeaseForm(true) }} style={{
               background: 'none', border: '1px solid var(--border)', borderRadius: 6,
               padding: '4px 8px', color: 'var(--text-secondary)', cursor: 'pointer',

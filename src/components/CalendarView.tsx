@@ -483,22 +483,22 @@ export function CalendarView() {
                   </span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 12px', fontSize: 13 }}>
-                  <span style={{ color: 'var(--text-muted)' }}>📅</span>
+                  <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: 13 }}></span>
                     <span>{new Date(selectedEvent.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
                   {selectedEvent.event_time && <>
-                    <span style={{ color: 'var(--text-muted)' }}>⏰</span>
+                    <span style={{ color: 'var(--text-muted)' }}></span>
                     <span>{selectedEvent.event_time.substring(0, 5)} · {selectedEvent.duration_minutes} min</span>
                   </>}
                   {selectedEvent.location && <>
-                    <span style={{ color: 'var(--text-muted)' }}>📍</span>
+                    <span style={{ color: 'var(--text-muted)' }}></span>
                     <span>{selectedEvent.location}</span>
                   </>}
                   {selectedEvent.contact_name && <>
-                    <span style={{ color: 'var(--text-muted)' }}>👤</span>
+                    <span style={{ color: 'var(--text-muted)' }}></span>
                     <span>{selectedEvent.contact_name}</span>
                   </>}
                   {selectedEvent.contact_phone && <>
-                    <span style={{ color: 'var(--text-muted)' }}>📞</span>
+                    <span style={{ color: 'var(--text-muted)' }}></span>
                     <span>{selectedEvent.contact_phone}</span>
                   </>}
                 </div>
