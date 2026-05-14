@@ -243,22 +243,25 @@ export function CalendarView() {
   }
 
   async function handleDelete(eventId: string) {
-    if (!confirm('Delete this event?')) return
+    if (!confirm('Cancel this event?')) return
 
     const headers: Record<string, string> = {
       'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
     }
 
     try {
       await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/calendar_events?id=eq.${eventId}`, {
-        method: 'DELETE',
-        headers
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status: 'cancelled' })
       })
       setSelectedEvent(null)
       await loadEvents()
     } catch (err) {
-      console.error('Failed to delete event:', err)
+      console.error('Failed to cancel event:', err)
     }
   }
 
