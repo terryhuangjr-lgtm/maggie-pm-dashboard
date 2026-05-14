@@ -79,6 +79,21 @@ export function CalendarView() {
     contact_phone: ''
   })
 
+  function resetForm() {
+    setFormData({
+      title: '',
+      description: '',
+      event_type: 'appointment',
+      event_date: new Date().toISOString().split('T')[0],
+      event_time: '09:00',
+      duration_minutes: 60,
+      property_id: '',
+      location: '',
+      contact_name: '',
+      contact_phone: ''
+    })
+  }
+
   useEffect(() => {
     loadEvents()
     loadProperties()
@@ -219,18 +234,7 @@ export function CalendarView() {
       }
 
       setShowForm(false)
-      setFormData({
-        title: '',
-        description: '',
-        event_type: 'appointment',
-        event_date: new Date().toISOString().split('T')[0],
-        event_time: '09:00',
-        duration_minutes: 60,
-        property_id: '',
-        location: '',
-        contact_name: '',
-        contact_phone: ''
-      })
+      resetForm()
       await loadEvents()
     } catch (err) {
       console.error('Failed to create event:', err)
@@ -513,11 +517,11 @@ export function CalendarView() {
 
       {/* New Event Form Modal */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+        <div className="modal-overlay" onClick={() => { setShowForm(false); resetForm(); }}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
               <h3>New Event</h3>
-              <button className="filter-btn" onClick={() => setShowForm(false)}><X size={16} /></button>
+              <button className="filter-btn" onClick={() => { setShowForm(false); resetForm(); }}><X size={16} /></button>
             </div>
             <div className="modal-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -646,7 +650,7 @@ export function CalendarView() {
               </div>
             </div>
             <div className="modal-footer" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn" onClick={() => setShowForm(false)}>Cancel</button>
+              <button className="btn" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</button>
               <button
                 className="btn btn-primary"
                 onClick={handleSave}
