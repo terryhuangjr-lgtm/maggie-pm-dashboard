@@ -307,7 +307,7 @@ export function CalendarView() {
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
         {/* Calendar Grid */}
-        <div className="card" style={{ flex: 1, minWidth: 500 }}>
+        <div className="card" style={{ flex: 1, minWidth: 320 }}>
           <div className="card-header">
             <h3>{monthNames[month - 1]} {year}</h3>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -322,7 +322,7 @@ export function CalendarView() {
             </div>
           </div>
           <div className="card-body" style={{ overflowX: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, minWidth: 420 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, minWidth: 350 }}>
               {dayNames.map(d => (
                 <div key={d} style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', padding: '8px 0' }}>
                   {d}
@@ -411,7 +411,7 @@ export function CalendarView() {
         </div>
 
         {/* Events Sidebar */}
-        <div className="card" style={{ width: 340, flexShrink: 0, maxHeight: 700, overflow: 'auto' }}>
+        <div className="card" style={{ width: 300, flexShrink: 0, maxHeight: 700, overflow: 'auto' }}>
           <div className="card-header"><h3>All Events</h3></div>
           <div className="card-body">
             {events.length === 0 ? (
