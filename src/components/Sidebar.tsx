@@ -1,4 +1,4 @@
-import { LayoutDashboard, Building2, ListTodo, Calendar } from 'lucide-react'
+import { LayoutDashboard, Building2, ListTodo, Calendar, BookOpen } from 'lucide-react'
 
 interface SidebarProps {
   activeView: string
@@ -8,6 +8,7 @@ interface SidebarProps {
 const navItems = [
   { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
   { id: 'properties', label: 'Properties', icon: Building2 },
+  { id: 'contacts', label: 'Contacts', icon: BookOpen },
   { id: 'tasks', label: 'Tasks', icon: ListTodo },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
 ]

@@ -5,6 +5,7 @@ import { PropertyList } from './components/PropertyList'
 import { PropertyDetail } from './components/PropertyDetail'
 import { TaskList } from './components/TaskList'
 import { CalendarView } from './components/CalendarView'
+import { ContactList } from './components/ContactList'
 import './styles/index.css'
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
         )}
         {activeView === 'tasks' && <TaskList />}
         {activeView === 'calendar' && <CalendarView />}
+        {activeView === 'contacts' && <ContactList />}
       </main>
     </div>
   )
