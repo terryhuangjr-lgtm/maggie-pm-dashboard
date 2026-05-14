@@ -321,8 +321,8 @@ export function CalendarView() {
               }}>Next →</button>
             </div>
           </div>
-          <div className="card-body" style={{ overflowX: 'auto' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, minWidth: 350 }}>
+          <div className="card-body" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 2, minWidth: 350 }}>
               {dayNames.map(d => (
                 <div key={d} style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', padding: '8px 0' }}>
                   {d}
