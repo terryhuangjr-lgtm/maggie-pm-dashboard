@@ -416,8 +416,11 @@ export function CalendarView() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {events.slice(0, 30).map((ev, i) => {
-                  const eventDate = new Date(ev.date)
-                  const daysUntil = Math.ceil((eventDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                  const [y, m, d] = ev.date.split('-').map(Number)
+                  const eventDate = new Date(y, m - 1, d, 12, 0, 0)
+                  const todayMid = new Date()
+                  todayMid.setHours(12, 0, 0, 0)
+                  const daysUntil = Math.ceil((eventDate.getTime() - todayMid.getTime()) / (1000 * 60 * 60 * 24))
                   const colors = EVENT_COLORS[ev.type] || EVENT_COLORS.appointment
                   const customEv = ev.id ? dbEvents.find(e => e.id === ev.id) : null
                   return (
@@ -441,7 +444,7 @@ export function CalendarView() {
                         {ev.property}
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)' }}>
-                        <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                        <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}</span>
                         <span style={{
                           color: daysUntil <= 0 ? 'var(--red)' : daysUntil <= 7 ? 'var(--yellow)' : 'var(--text-muted)',
                           fontWeight: daysUntil <= 7 ? 600 : 400
@@ -478,7 +481,7 @@ export function CalendarView() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 12px', fontSize: 13 }}>
                   <span style={{ color: 'var(--text-muted)' }}>📅</span>
-                  <span>{new Date(selectedEvent.event_date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                    <span>{new Date(selectedEvent.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
                   {selectedEvent.event_time && <>
                     <span style={{ color: 'var(--text-muted)' }}>⏰</span>
                     <span>{selectedEvent.event_time.substring(0, 5)} · {selectedEvent.duration_minutes} min</span>
