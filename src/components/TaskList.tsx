@@ -17,6 +17,7 @@ interface Task {
   address: string | null
   unit_number: string | null
   tenant_name: string | null
+  completed_at?: string | null
 }
 
 export function TaskList() {

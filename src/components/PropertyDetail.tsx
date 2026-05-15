@@ -5,7 +5,8 @@ import { Modal } from './ui/Modal'
 import { PropertyForm } from './PropertyForm'
 import { TenantForm } from './TenantForm'
 import { LeaseForm } from './LeaseForm'
-import { ChevronLeft, MapPin, Building2, Plus, Pencil } from 'lucide-react'
+import { PaymentForm } from './PaymentForm'
+import { ChevronLeft, MapPin, Building2, Plus, Pencil, CheckCircle } from 'lucide-react'
 
 interface FullProperty {
   id: string
@@ -16,6 +17,7 @@ interface FullProperty {
   property_type: string
   bedrooms: number
   bathrooms: number
+  square_footage: number | null
   owner_name: string
   owner_email: string | null
   owner_phone: string | null
@@ -57,6 +59,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [editTenant, setEditTenant] = useState<any>(null)
   const [showLeaseForm, setShowLeaseForm] = useState(false)
   const [editLease, setEditLease] = useState<any>(null)
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
 
   useEffect(() => { loadProperty() }, [propertyId])
 
@@ -109,7 +112,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         <div>
           <h2>{property.address}{property.unit_number ? `, ${property.unit_number}` : ''}</h2>
           <p style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
-            {property.city}, {property.state} • {property.property_type} • {property.bedrooms} bed / {property.bathrooms} bath
+            {property.city}, {property.state} • {property.property_type} • {property.bedrooms} bed / {property.bathrooms} bath {property.square_footage ? `• ${property.square_footage} sqft` : ''}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -289,6 +292,16 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                     {new Date(lease.lease_end) < new Date() ? ' (EXPIRED)' : ''}
                   </div>
                 </div>
+
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: 8 }}
+                    onClick={() => setShowPaymentForm(true)}
+                  >
+                    <CheckCircle size={16} /> Log Rent Payment
+                  </button>
+                </div>
               </>
             ) : (
               <div className="empty-state" style={{ padding: '24px 12px' }}>
@@ -316,6 +329,22 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         <LeaseForm propertyId={propertyId} tenants={allTenants} lease={editLease}
           onSaved={() => { setShowLeaseForm(false); setEditLease(null); loadProperty() }}
           onCancel={() => { setShowLeaseForm(false); setEditLease(null) }} />
+      </Modal>
+
+      <Modal open={showPaymentForm} onClose={() => setShowPaymentForm(false)} title="Log Payment" width="480px">
+        {lease && (
+          <PaymentForm 
+            propertyId={propertyId}
+            leaseId={lease.id}
+            tenantId={tenant?.id || null}
+            rentAmount={lease.monthly_rent}
+            onSaved={() => {
+              setShowPaymentForm(false)
+              loadProperty()
+            }}
+            onCancel={() => setShowPaymentForm(false)}
+          />
+        )}
       </Modal>
     </div>
   )

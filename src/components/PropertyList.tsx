@@ -12,6 +12,7 @@ interface Property {
   property_type: string
   bedrooms: number
   bathrooms: number
+  square_footage: number | null
   owner_name: string
   status: string
   monthly_management_fee: number
@@ -138,7 +139,7 @@ export function PropertyList({ onViewProperty }: { onViewProperty: (id: string) 
                   </div>
                   <div className="property-card-sub">
                     <span>{p.property_type}</span>
-                    <span>{p.bedrooms} bed / {p.bathrooms} bath</span>
+                    <span>{p.bedrooms} bed / {p.bathrooms} bath {p.square_footage ? `/ ${p.square_footage} sqft` : ''}</span>
                     <span>Owner: {p.owner_name}</span>
                   </div>
                 </div>
