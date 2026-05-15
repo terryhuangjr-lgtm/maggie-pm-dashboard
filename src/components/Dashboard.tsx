@@ -250,7 +250,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
                       }
                     </td>
                     <td>
-                      {r.payment_status !== 'received' && (
+                      {r.payment_status !== 'received' ? (
                         <button 
                           className="btn" 
                           style={{ padding: '4px 8px', fontSize: 11 }}
@@ -265,6 +265,29 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
                           }}
                         >
                           Log Payment
+                        </button>
+                      ) : (
+                        <button 
+                          className="btn btn-danger" 
+                          style={{ padding: '4px 8px', fontSize: 11, background: 'transparent', border: '1px solid var(--red)', color: 'var(--red)' }}
+                          onClick={async () => {
+                            if (!r.payment_id || !confirm('Undo this payment?')) return;
+                            try {
+                              await supabase.from('payments').delete().eq('id', r.payment_id);
+                              await supabase.from('activity_log').insert({
+                                property_id: r.property_id,
+                                tenant_id: r.tenant_id,
+                                action: 'Payment reversed',
+                                details: 'Payment was undone manually',
+                                source: 'manual'
+                              });
+                              loadData();
+                            } catch (e) {
+                              console.error(e);
+                            }
+                          }}
+                        >
+                          Undo
                         </button>
                       )}
                     </td>
