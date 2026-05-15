@@ -13,7 +13,6 @@ interface Task {
   priority: string
   due_date: string | null
   status: string
-  completed_at: string | null
   address: string | null
   unit_number: string | null
   tenant_name: string | null
