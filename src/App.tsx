@@ -6,6 +6,7 @@ import { PropertyDetail } from './components/PropertyDetail'
 import { TaskList } from './components/TaskList'
 import { CalendarView } from './components/CalendarView'
 import { ContactList } from './components/ContactList'
+import { FinancialReports } from './components/FinancialReports'
 import './styles/index.css'
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
         {activeView === 'tasks' && <TaskList />}
         {activeView === 'calendar' && <CalendarView />}
         {activeView === 'contacts' && <ContactList />}
+        {activeView === 'reports' && <FinancialReports />}
       </main>
     </div>
   )

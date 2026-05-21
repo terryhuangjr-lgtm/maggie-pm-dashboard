@@ -1,4 +1,4 @@
-import { LayoutDashboard, Building2, ListTodo, Calendar, BookOpen } from 'lucide-react'
+import { LayoutDashboard, Building2, ListTodo, Calendar, BookOpen, DollarSign } from 'lucide-react'
 
 interface SidebarProps {
   activeView: string
@@ -11,13 +11,14 @@ const navItems = [
   { id: 'contacts', label: 'Contacts', icon: BookOpen },
   { id: 'tasks', label: 'Tasks', icon: ListTodo },
   { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'reports', label: 'Reports', icon: DollarSign },
 ]
 
 export function Sidebar({ activeView, onNavigate }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <span>Maggie Huang</span>
+        <span>MH Group</span>
       </div>
       <nav className="sidebar-nav">
         {navItems.map(item => (

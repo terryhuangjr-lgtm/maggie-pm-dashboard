@@ -16,6 +16,9 @@ interface Property {
   owner_name: string
   status: string
   monthly_management_fee: number
+  cc_payment_method: string | null
+  cc_platform: string | null
+  re_tax_schedule: string | null
 }
 
 interface LeaseInfo {
@@ -169,6 +172,12 @@ export function PropertyList({ onViewProperty }: { onViewProperty: (id: string) 
                   <span>Lease ends: {new Date(lease.lease_end).toLocaleDateString()}</span>
                 </div>
               )}
+              <div className="property-card-sub" style={{ marginTop: 4 }}>
+                {p.monthly_management_fee ? <span>Mgmt fee: ${Number(p.monthly_management_fee).toLocaleString()}/mo</span> : null}
+                {p.cc_payment_method ? <span>Pay: {p.cc_payment_method}</span> : null}
+                {p.cc_platform && !p.cc_platform.startsWith('http') ? <span>{p.cc_platform}</span> : null}
+                {p.re_tax_schedule ? <span>Tax: {p.re_tax_schedule}</span> : null}
+              </div>
             </div>
           )
         })}

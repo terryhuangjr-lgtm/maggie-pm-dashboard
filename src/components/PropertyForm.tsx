@@ -13,7 +13,10 @@ const defaultProperty = {
   owner_name: '', owner_email: '', owner_phone: '', owner_language: 'English',
   purchase_date: '', purchase_price: '', current_market_value: '',
   monthly_management_fee: '', building_management_company: '',
-  building_management_contact: '', status: 'active', notes: ''
+  building_management_contact: '', status: 'active', notes: '',
+  cc_payment_method: '', cc_platform: '', electric_billing: '',
+  e_bill_platform: '', re_tax_schedule: '', lease_term_display: '',
+  lease_document_url: '', renewal_notice_date: ''
 }
 
 export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps) {
@@ -73,6 +76,15 @@ export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps)
       if (form.building_management_company) data.building_management_company = form.building_management_company
       if (form.building_management_contact) data.building_management_contact = form.building_management_contact
       if (form.notes) data.notes = form.notes
+      // New fields from MHG spreadsheet
+      if (form.cc_payment_method) data.cc_payment_method = form.cc_payment_method
+      if (form.cc_platform) data.cc_platform = form.cc_platform
+      if (form.electric_billing) data.electric_billing = form.electric_billing
+      if (form.e_bill_platform) data.e_bill_platform = form.e_bill_platform
+      if (form.re_tax_schedule) data.re_tax_schedule = form.re_tax_schedule
+      if (form.lease_term_display) data.lease_term_display = form.lease_term_display
+      if (form.lease_document_url) data.lease_document_url = form.lease_document_url
+      if (form.renewal_notice_date) data.renewal_notice_date = form.renewal_notice_date
 
       if (isEdit) {
         await supabase.from('properties').update(data).eq('id', property.id)
@@ -196,6 +208,45 @@ export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps)
         <div>
           <label style={labelStyle}>Mgmt Fee/Month</label>
           <input style={fieldStyle} type="number" value={form.monthly_management_fee} onChange={e => set('monthly_management_fee', e.target.value)} placeholder="$" />
+        </div>
+      </div>
+
+      <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '16px 0' }} />
+      <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text-secondary)' }}>Billing & Utilities</h4>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          <label style={labelStyle}>CC Payment Method</label>
+          <input style={fieldStyle} value={form.cc_payment_method} onChange={e => set('cc_payment_method', e.target.value)} placeholder="AutoPay, We pay, etc." />
+        </div>
+        <div>
+          <label style={labelStyle}>CC Platform</label>
+          <input style={fieldStyle} value={form.cc_platform} onChange={e => set('cc_platform', e.target.value)} placeholder="Clickpay, Building Link, etc." />
+        </div>
+        <div>
+          <label style={labelStyle}>Electric Billing</label>
+          <input style={fieldStyle} value={form.electric_billing} onChange={e => set('electric_billing', e.target.value)} placeholder="Landlord pay, Tenant side, etc." />
+        </div>
+        <div>
+          <label style={labelStyle}>E-Bill Platform</label>
+          <input style={fieldStyle} value={form.e_bill_platform} onChange={e => set('e_bill_platform', e.target.value)} placeholder="Clickpay, Rentcafe, etc." />
+        </div>
+        <div>
+          <label style={labelStyle}>RE Tax Schedule</label>
+          <select style={fieldStyle} value={form.re_tax_schedule} onChange={e => set('re_tax_schedule', e.target.value)}>
+            <option value="">Select...</option>
+            <option value="Biannually">Biannually</option>
+            <option value="Quarterly">Quarterly</option>
+            <option value="Annually">Annually</option>
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Renewal Notice Date</label>
+          <input style={fieldStyle} type="date" value={form.renewal_notice_date} onChange={e => set('renewal_notice_date', e.target.value)} />
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label style={labelStyle}>Lease Document URL</label>
+          <input style={fieldStyle} value={form.lease_document_url} onChange={e => set('lease_document_url', e.target.value)} placeholder="https://..." />
         </div>
       </div>
 

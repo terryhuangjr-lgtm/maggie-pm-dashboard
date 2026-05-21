@@ -6,7 +6,7 @@ import { PropertyForm } from './PropertyForm'
 import { TenantForm } from './TenantForm'
 import { LeaseForm } from './LeaseForm'
 import { PaymentForm } from './PaymentForm'
-import { ChevronLeft, MapPin, Building2, Plus, Pencil, CheckCircle } from 'lucide-react'
+import { ChevronLeft, MapPin, Building2, Plus, Pencil, CheckCircle, Upload, FileText } from 'lucide-react'
 
 interface FullProperty {
   id: string
@@ -24,6 +24,14 @@ interface FullProperty {
   status: string
   monthly_management_fee: number
   notes: string | null
+  cc_payment_method: string | null
+  cc_platform: string | null
+  electric_billing: string | null
+  e_bill_platform: string | null
+  re_tax_schedule: string | null
+  lease_term_display: string | null
+  lease_document_url: string | null
+  renewal_notice_date: string | null
 }
 
 interface TenantInfo {
@@ -61,6 +69,13 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [editLease, setEditLease] = useState<any>(null)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
 
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadResult, setUploadResult] = useState<any>(null)
+  const [uploadError, setUploadError] = useState('')
+  const [dropboxFiles, setDropboxFiles] = useState<any[]>([])
+  const [filesLoading, setFilesLoading] = useState(true)
+
   useEffect(() => { loadProperty() }, [propertyId])
 
   async function loadProperty() {
@@ -69,11 +84,9 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
       if (props) {
         setProperty(props)
 
-        // Get all tenants for this property
         const { data: tenantsData } = await supabase.from('tenants').select('*').eq('property_id', propertyId)
         if (tenantsData) setAllTenants(tenantsData)
 
-        // Get active or most recent lease
         const { data: leasesData } = await supabase
           .from('leases')
           .select('*')
@@ -96,6 +109,69 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
       console.error('Failed to load property:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadDropboxFiles() {
+    if (!property) return
+    setFilesLoading(true)
+    try {
+      const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
+      const folderName = `${property.address}${property.unit_number ? ` #${property.unit_number.trim()}` : ''}`
+      const res = await fetch(`${API}/api/dropbox-list?property=${encodeURIComponent(folderName)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setDropboxFiles(data.entries || [])
+      }
+    } catch (err) {
+      console.error('Failed to load Dropbox files:', err)
+    } finally {
+      setFilesLoading(false)
+    }
+  }
+
+  useEffect(() => { loadDropboxFiles() }, [property])
+
+  async function handleFileUpload(file: File | undefined | null) {
+    if (!file || !property) return
+    setUploading(true)
+    setUploadProgress(0)
+    setUploadResult(null)
+    setUploadError('')
+
+    try {
+      const folderName = `${property.address}${property.unit_number ? ` #${property.unit_number.trim()}` : ''}`
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('property', folderName)
+      formData.append('category', 'Documents')
+
+      const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
+
+      const res = await fetch(`${API}/api/dropbox-upload`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+
+      const result = await res.json()
+      setUploadResult(result)
+
+      await supabase.from('activity_log').insert({
+        property_id: propertyId,
+        action: 'File uploaded',
+        details: `Uploaded ${file.name} to Dropbox`,
+        source: 'manual'
+      })
+      loadDropboxFiles()
+    } catch (err: any) {
+      setUploadError(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -174,7 +250,64 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           </div>
         </div>
 
-        {/* Tenant section */}
+        <div className="card">
+          <div className="card-header"><h3>Billing & Utilities</h3></div>
+          <div className="card-body">
+            {property.cc_payment_method && (
+              <div className="detail-field">
+                <div className="detail-field-label">CC Payment Method</div>
+                <div className="detail-field-value">{property.cc_payment_method}</div>
+              </div>
+            )}
+            {property.cc_platform && (
+              <div className="detail-field">
+                <div className="detail-field-label">CC Platform</div>
+                <div className="detail-field-value">{property.cc_platform}</div>
+              </div>
+            )}
+            {property.electric_billing && (
+              <div className="detail-field">
+                <div className="detail-field-label">Electric Billing</div>
+                <div className="detail-field-value">{property.electric_billing}</div>
+              </div>
+            )}
+            {property.e_bill_platform && (
+              <div className="detail-field">
+                <div className="detail-field-label">E-Bill Platform</div>
+                <div className="detail-field-value">{property.e_bill_platform}</div>
+              </div>
+            )}
+            {property.re_tax_schedule && (
+              <div className="detail-field">
+                <div className="detail-field-label">RE Tax Schedule</div>
+                <div className="detail-field-value">{property.re_tax_schedule}</div>
+              </div>
+            )}
+            {property.lease_term_display && (
+              <div className="detail-field">
+                <div className="detail-field-label">Lease Term</div>
+                <div className="detail-field-value">{property.lease_term_display}</div>
+              </div>
+            )}
+            {property.renewal_notice_date && (
+              <div className="detail-field">
+                <div className="detail-field-label">Renewal Notice Date</div>
+                <div className="detail-field-value">{new Date(property.renewal_notice_date).toLocaleDateString()}</div>
+              </div>
+            )}
+            {property.lease_document_url && (
+              <div className="detail-field">
+                <div className="detail-field-label">Lease Document</div>
+                <div className="detail-field-value">
+                  <a href={property.lease_document_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
+                    View Lease
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="card">
           <div className="card-header">
             <h3> Tenant</h3>
@@ -237,7 +370,6 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           </div>
         </div>
 
-        {/* Lease section */}
         <div className="card">
           <div className="card-header">
             <h3>Lease</h3>
@@ -294,8 +426,8 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 </div>
 
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                  <button 
-                    className="btn btn-primary" 
+                  <button
+                    className="btn btn-primary"
                     style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: 8 }}
                     onClick={() => setShowPaymentForm(true)}
                   >
@@ -310,9 +442,77 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
             )}
           </div>
         </div>
+
+        <div className="card">
+          <div className="card-header"><h3>Files</h3></div>
+          <div className="card-body">
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              Upload files to this property's Dropbox folder.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <label style={{
+                padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: 13
+              }}>
+                <Upload size={14} /> Upload File
+                <input type="file" style={{ display: 'none' }}
+                  onChange={(e) => handleFileUpload(e.target.files?.[0])} />
+              </label>
+            </div>
+            {uploading && (
+              <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-muted)' }}>
+                Uploading... {uploadProgress > 0 && `${uploadProgress}%`}
+              </div>
+            )}
+            {uploadResult && (
+              <div style={{ marginTop: 12, fontSize: 13, color: 'var(--green)' }}>
+                ✓ Uploaded
+                {uploadResult.url && (
+                  <a href={uploadResult.url} target="_blank" rel="noopener noreferrer"
+                    style={{ color: 'var(--accent)', marginLeft: 8 }}>
+                    <FileText size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                    View
+                  </a>
+                )}
+              </div>
+            )}
+            {uploadError && (
+              <div style={{ marginTop: 12, fontSize: 13, color: 'var(--red)' }}>
+                ✗ {uploadError}
+              </div>
+            )}
+
+            {filesLoading ? (
+              <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+                Loading files...
+              </div>
+            ) : dropboxFiles.length > 0 ? (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  Existing Files
+                </div>
+                {dropboxFiles.map((file: any, i: number) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 0', borderBottom: '1px solid var(--border)',
+                    fontSize: 12
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <FileText size={14} style={{ color: 'var(--text-muted)' }} />
+                      <span>{file.name}</span>
+                    </div>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                      {file.size ? `${(file.size / 1024).toFixed(0)} KB` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
 
-      {/* Modals */}
       <Modal open={showPropForm} onClose={() => setShowPropForm(false)} title="Edit Property" width="640px">
         <PropertyForm property={property} onSaved={() => { setShowPropForm(false); loadProperty() }} onCancel={() => setShowPropForm(false)} />
       </Modal>
@@ -333,7 +533,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
 
       <Modal open={showPaymentForm} onClose={() => setShowPaymentForm(false)} title="Log Payment" width="480px">
         {lease && (
-          <PaymentForm 
+          <PaymentForm
             propertyId={propertyId}
             leaseId={lease.id}
             tenantId={tenant?.id || null}
