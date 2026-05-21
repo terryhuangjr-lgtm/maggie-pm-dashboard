@@ -16,7 +16,8 @@ const defaultProperty = {
   building_management_contact: '', status: 'active', notes: '',
   cc_payment_method: '', cc_platform: '', electric_billing: '',
   e_bill_platform: '', re_tax_schedule: '', lease_term_display: '',
-  lease_document_url: '', renewal_notice_date: ''
+  lease_document_url: '', renewal_notice_date: '',
+  lease_start: '', lease_end: ''
 }
 
 export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps) {
@@ -85,6 +86,8 @@ export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps)
       if (form.lease_term_display) data.lease_term_display = form.lease_term_display
       if (form.lease_document_url) data.lease_document_url = form.lease_document_url
       if (form.renewal_notice_date) data.renewal_notice_date = form.renewal_notice_date
+      if (form.lease_start) data.lease_start = form.lease_start
+      if (form.lease_end) data.lease_end = form.lease_end
 
       if (isEdit) {
         await supabase.from('properties').update(data).eq('id', property.id)
@@ -239,6 +242,14 @@ export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps)
             <option value="Quarterly">Quarterly</option>
             <option value="Annually">Annually</option>
           </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Lease Start</label>
+          <input style={fieldStyle} type="date" value={form.lease_start} onChange={e => set('lease_start', e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>Lease End</label>
+          <input style={fieldStyle} type="date" value={form.lease_end} onChange={e => set('lease_end', e.target.value)} />
         </div>
         <div>
           <label style={labelStyle}>Renewal Notice Date</label>

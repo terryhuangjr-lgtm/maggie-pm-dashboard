@@ -297,6 +297,25 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 <div className="detail-field-value">{property.lease_term_display}</div>
               </div>
             )}
+            {property.lease_start && (
+              <div className="detail-field">
+                <div className="detail-field-label">Lease Start</div>
+                <div className="detail-field-value">{new Date(property.lease_start).toLocaleDateString()}</div>
+              </div>
+            )}
+            {property.lease_end && (
+              <div className="detail-field">
+                <div className="detail-field-label">Lease End</div>
+                <div className="detail-field-value" style={{
+                  color: new Date(property.lease_end) < new Date() ? 'var(--red)' :
+                         new Date(property.lease_end) < new Date(Date.now() + 30*24*60*60*1000) ? 'var(--yellow)' : 'inherit',
+                  fontWeight: new Date(property.lease_end) < new Date() ? 600 : 'normal'
+                }}>
+                  {new Date(property.lease_end).toLocaleDateString()}
+                  {new Date(property.lease_end) < new Date() ? ' (EXPIRED)' : ''}
+                </div>
+              </div>
+            )}
             {property.renewal_notice_date && (
               <div className="detail-field">
                 <div className="detail-field-label">Renewal Notice Date</div>
