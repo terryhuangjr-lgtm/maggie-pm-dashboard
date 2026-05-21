@@ -1,4 +1,0 @@
-#!/bin/bash
-# Supabase config for Maggie PM Dashboard - DO NOT COMMIT
-export SUPABASE_URL="https://yzmqgldiidpmzritdxfj.supabase.co"
-export SUPABASE_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bXFnbGRpaWRwbXpyaXRkeGZqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODcwMzkyMCwiZXhwIjoyMDk0Mjc5OTIwfQ.MYu449VzbgfejC4aiexE5u71UDHfKH47-YNRsse004Y"
