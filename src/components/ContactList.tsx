@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Phone, Mail, Building2, Star, Search, ChevronDown, User, Wrench, HardHat, Shield, Briefcase, Building, Scale, BookOpen, MoreHorizontal } from 'lucide-react'
+import { Modal } from './ui/Modal'
+import { Phone, Mail, Building2, Star, Search, ChevronDown, User, Wrench, HardHat, Shield, Briefcase, Building, Scale, BookOpen, MoreHorizontal, Plus } from 'lucide-react'
 
 interface Contact {
   id: string
@@ -10,6 +11,7 @@ interface Contact {
   phone: string | null
   role: string
   company: string | null
+  property_id: string | null
   property_address: string | null
   property_unit: string | null
   language_preference: string
@@ -17,6 +19,12 @@ interface Contact {
   is_favorite: boolean
   status: string
   created_at: string
+}
+
+interface PropertyOption {
+  id: string
+  address: string
+  unit_number: string | null
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -54,7 +62,6 @@ const ROLE_ORDER = [
   'handyman', 'plumber', 'electrician',
   'attorney', 'accountant', 'insurance', 'board_member', 'other'
 ]
-
 const allRoles = Object.keys(ROLE_LABELS)
 
 export function ContactList() {
@@ -63,9 +70,27 @@ export function ContactList() {
   const [search, setSearch] = useState('')
   const [selectedRole, setSelectedRole] = useState<string | null>(null)
   const [expandedContact, setExpandedContact] = useState<string | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [properties, setProperties] = useState<PropertyOption[]>([])
+  const [saveError, setSaveError] = useState('')
+
+  // Add contact form state
+  const [form, setForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    role: 'tenant',
+    company: '',
+    property_id: '',
+    language_preference: 'English',
+    notes: '',
+    is_favorite: false,
+  })
 
   useEffect(() => {
     loadContacts()
+    loadProperties()
   }, [])
 
   async function loadContacts() {
@@ -82,6 +107,74 @@ export function ContactList() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadProperties() {
+    try {
+      const { data } = await supabase
+        .from('properties')
+        .select('id, address, unit_number')
+        .order('address', { ascending: true })
+      setProperties(data || [])
+    } catch (err) {
+      console.error('Failed to load properties:', err)
+    }
+  }
+
+  async function handleAddContact(e: React.FormEvent) {
+    e.preventDefault()
+    setSaveError('')
+
+    if (!form.first_name.trim() || !form.last_name.trim()) {
+      setSaveError('First and last name are required')
+      return
+    }
+
+    try {
+      const payload: any = {
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        role: form.role,
+        language_preference: form.language_preference,
+        is_favorite: form.is_favorite,
+        status: 'active',
+      }
+      if (form.email) payload.email = form.email.trim()
+      if (form.phone) payload.phone = form.phone.trim()
+      if (form.company) payload.company = form.company.trim()
+      if (form.property_id) payload.property_id = form.property_id
+      if (form.notes) payload.notes = form.notes.trim()
+
+      const { error } = await supabase.from('contacts').insert(payload)
+      if (error) throw error
+
+      await supabase.from('activity_log').insert({
+        action: 'Contact added',
+        details: `Added contact: ${form.first_name} ${form.last_name} (${ROLE_LABELS[form.role] || form.role})`,
+        source: 'manual',
+      })
+
+      setShowAddModal(false)
+      setForm({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        role: 'tenant',
+        company: '',
+        property_id: '',
+        language_preference: 'English',
+        notes: '',
+        is_favorite: false,
+      })
+      await loadContacts()
+    } catch (err: any) {
+      setSaveError(err.message || 'Failed to add contact')
+    }
+  }
+
+  function set(field: string, value: string | boolean) {
+    setForm({ ...form, [field]: value })
   }
 
   const filtered = contacts.filter(c => {
@@ -104,12 +197,23 @@ export function ContactList() {
       grouped[role] = roleContacts
     }
   }
-  // Add any roles not in ROLE_ORDER
   for (const c of filtered) {
     if (!grouped[c.role]) grouped[c.role] = []
     if (!grouped[c.role].some(existing => existing.id === c.id)) {
       grouped[c.role].push(c)
     }
+  }
+
+  const fieldStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 12px', borderRadius: 8,
+    border: '1px solid var(--border)', background: 'var(--bg-primary)',
+    color: 'var(--text-primary)', fontSize: 13, outline: 'none',
+    boxSizing: 'border-box', fontFamily: 'var(--font-body)',
+  }
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+    letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block',
   }
 
   return (
@@ -119,7 +223,7 @@ export function ContactList() {
         <p>Property management directory — owners, tenants, vendors, and more</p>
       </div>
 
-      {/* Search + Filter */}
+      {/* Search + Filter + Add button */}
       <div className="filter-bar">
         <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -160,6 +264,19 @@ export function ContactList() {
             </button>
           )
         })}
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={{
+            marginLeft: 'auto',
+            padding: '8px 16px', borderRadius: 8, border: 'none',
+            background: 'var(--accent)', color: '#fff', fontWeight: 600,
+            fontSize: 13, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Plus size={15} /> Add Contact
+        </button>
       </div>
 
       {/* Contacts by Role */}
@@ -276,6 +393,97 @@ export function ContactList() {
           </div>
         ))
       )}
+
+      {/* Add Contact Modal */}
+      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title="Add Contact" width="520px">
+        <form onSubmit={handleAddContact}>
+          {saveError && (
+            <div style={{ color: 'var(--red)', marginBottom: 12, fontSize: 13, padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 6 }}>
+              {saveError}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>First Name *</label>
+              <input style={fieldStyle} value={form.first_name} onChange={e => set('first_name', e.target.value)} placeholder="John" required />
+            </div>
+            <div>
+              <label style={labelStyle}>Last Name *</label>
+              <input style={fieldStyle} value={form.last_name} onChange={e => set('last_name', e.target.value)} placeholder="Doe" required />
+            </div>
+            <div>
+              <label style={labelStyle}>Email</label>
+              <input style={fieldStyle} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="john@example.com" />
+            </div>
+            <div>
+              <label style={labelStyle}>Phone</label>
+              <input style={fieldStyle} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="(212) 555-0123" />
+            </div>
+            <div>
+              <label style={labelStyle}>Role</label>
+              <select style={fieldStyle} value={form.role} onChange={e => set('role', e.target.value)}>
+                {Object.entries(ROLE_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Company</label>
+              <input style={fieldStyle} value={form.company} onChange={e => set('company', e.target.value)} placeholder="Company name" />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>Property (optional)</label>
+              <select style={fieldStyle} value={form.property_id} onChange={e => set('property_id', e.target.value)}>
+                <option value="">— No property —</option>
+                {properties.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.address}{p.unit_number ? ` #${p.unit_number}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Language</label>
+              <select style={fieldStyle} value={form.language_preference} onChange={e => set('language_preference', e.target.value)}>
+                <option value="English">English</option>
+                <option value="Chinese">Chinese</option>
+                <option value="Chinese / English">Chinese / English</option>
+                <option value="Korean">Korean</option>
+                <option value="Spanish">Spanish</option>
+                <option value="Russian">Russian</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 4 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={form.is_favorite}
+                  onChange={e => set('is_favorite', e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                />
+                Mark as favorite
+              </label>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label style={labelStyle}>Notes</label>
+            <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Any notes about this contact..." />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+            <button type="button" className="filter-btn" onClick={() => setShowAddModal(false)}>Cancel</button>
+            <button type="submit" style={{
+              padding: '8px 20px', borderRadius: 8, border: 'none',
+              background: 'var(--accent)', color: '#fff', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer',
+            }}>
+              Add Contact
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }
