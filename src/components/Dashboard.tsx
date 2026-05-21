@@ -202,7 +202,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
                         <div>{e.tenant_name}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.tenant_phone}</div>
                       </td>
-                      {isAdmin && <td>${Number(e.monthly_rent || 0).toLocaleString()}</td>}
+                      {isAdmin && <td>{Number(e.monthly_rent || 0).toLocaleString()}</td>}
                       <td>{new Date(e.lease_end).toLocaleDateString()}</td>
                       <td>
                         <span style={{
