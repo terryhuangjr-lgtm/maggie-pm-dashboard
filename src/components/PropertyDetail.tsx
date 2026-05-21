@@ -33,6 +33,8 @@ interface FullProperty {
   lease_term_display: string | null
   lease_document_url: string | null
   renewal_notice_date: string | null
+  lease_start: string | null
+  lease_end: string | null
 }
 
 interface TenantInfo {
