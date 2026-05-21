@@ -5,6 +5,7 @@ import { StatusBadge } from './ui/StatusBadge'
 import { Home, TrendingUp, AlertTriangle, Calendar, Clock, CheckCircle, Building2 } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import { PaymentForm } from './PaymentForm'
+import { useAuth } from '../lib/AuthContext'
 
 interface DashboardData {
   totalProperties: number
@@ -25,6 +26,8 @@ interface DashboardData {
 }
 
 export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
+  const { profile } = useAuth()
+  const isAdmin = profile?.role === 'admin'
   const [data, setData] = useState<DashboardData>({
     totalProperties: 0, occupiedUnits: 0, totalUnits: 0, portfolioValue: 0,
     monthlyRentExpected: 0, monthlyRentCollected: 0,
@@ -134,6 +137,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
           iconBg="rgba(16, 185, 129, 0.15)"
           change={`${occupancyRate}% occupied`}
         />
+        {isAdmin && (
         <StatCard
           label="Portfolio Value"
           value={`$${(data.portfolioValue / 1000000).toFixed(1)}M`}
@@ -141,6 +145,8 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
           iconBg="rgba(139, 92, 246, 0.15)"
           change={`${data.totalUnits} units total`}
         />
+        )}
+        {isAdmin && (
         <StatCard
           label="Monthly Rent"
           value={`$${(data.monthlyRentExpected || 0).toLocaleString()}`}
@@ -149,6 +155,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
           change={`$${(data.monthlyRentCollected || 0).toLocaleString()} collected`}
           changeType={data.monthlyRentCollected >= data.monthlyRentExpected * 0.9 ? 'positive' : 'negative'}
         />
+        )}
         <StatCard
           label="Open Tasks"
           value={data.openTasks}
@@ -182,7 +189,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
                   <tr>
                     <th>Property</th>
                     <th>Tenant</th>
-                    <th>Rent</th>
+                    {isAdmin && <th>Rent</th>}
                     <th>Expires</th>
                     <th>Days Left</th>
                   </tr>
@@ -195,7 +202,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
                         <div>{e.tenant_name}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.tenant_phone}</div>
                       </td>
-                      <td>${Number(e.monthly_rent || 0).toLocaleString()}</td>
+                      {isAdmin && <td>${Number(e.monthly_rent || 0).toLocaleString()}</td>}
                       <td>{new Date(e.lease_end).toLocaleDateString()}</td>
                       <td>
                         <span style={{

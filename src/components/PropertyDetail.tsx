@@ -411,6 +411,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           <div className="card-body">
             {lease ? (
               <>
+                {isAdmin && (
                 <div className="detail-field">
                   <div className="detail-field-label">Monthly Rent</div>
                   <div className="detail-field-value" style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>
@@ -421,6 +422,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                     }}>Edit</button>
                   </div>
                 </div>
+                )}
                 <div className="detail-field">
                   <div className="detail-field-label">Lease Period</div>
                   <div className="detail-field-value">
@@ -431,7 +433,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                   <div className="detail-field-label">Rent Due Day</div>
                   <div className="detail-field-value">{lease.rent_due_day}th of each month</div>
                 </div>
-                {lease.security_deposit && (
+                {isAdmin && lease.security_deposit && (
                   <div className="detail-field">
                     <div className="detail-field-label">Security Deposit</div>
                     <div className="detail-field-value">${Number(lease.security_deposit).toLocaleString()}</div>
@@ -452,6 +454,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                   </div>
                 </div>
 
+                {isAdmin && (
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                   <button
                     className="btn btn-primary"
@@ -461,6 +464,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                     <CheckCircle size={16} /> Log Rent Payment
                   </button>
                 </div>
+                )}
               </>
             ) : (
               <div className="empty-state" style={{ padding: '24px 12px' }}>
