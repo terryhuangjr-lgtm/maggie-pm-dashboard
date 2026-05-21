@@ -7,6 +7,7 @@ import { TenantForm } from './TenantForm'
 import { LeaseForm } from './LeaseForm'
 import { PaymentForm } from './PaymentForm'
 import { ChevronLeft, MapPin, Building2, Plus, Pencil, CheckCircle, Upload, FileText } from 'lucide-react'
+import { useAuth } from '../lib/AuthContext'
 
 interface FullProperty {
   id: string
@@ -75,6 +76,9 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [uploadError, setUploadError] = useState('')
   const [dropboxFiles, setDropboxFiles] = useState<any[]>([])
   const [filesLoading, setFilesLoading] = useState(true)
+
+  const { profile } = useAuth()
+  const isAdmin = profile?.role === 'admin'
 
   useEffect(() => { loadProperty() }, [propertyId])
 
@@ -215,10 +219,12 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
               <div className="detail-field-label">Bedrooms / Bathrooms</div>
               <div className="detail-field-value">{property.bedrooms} bed / {property.bathrooms} bath</div>
             </div>
-            <div className="detail-field">
-              <div className="detail-field-label">Management Fee</div>
-              <div className="detail-field-value">${Number(property.monthly_management_fee || 0).toLocaleString()}/mo</div>
-            </div>
+            {isAdmin && (
+              <div className="detail-field">
+                <div className="detail-field-label">Management Fee</div>
+                <div className="detail-field-value">${Number(property.monthly_management_fee || 0).toLocaleString()}/mo</div>
+              </div>
+            )}
             {property.notes && (
               <div className="detail-field">
                 <div className="detail-field-label">Notes</div>
@@ -228,6 +234,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           </div>
         </div>
 
+        {isAdmin && (
         <div className="card">
           <div className="card-header"><h3>Owner Information</h3></div>
           <div className="card-body">
@@ -249,6 +256,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
             )}
           </div>
         </div>
+        )}
 
         <div className="card">
           <div className="card-header"><h3>Billing & Utilities</h3></div>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Modal } from './ui/Modal'
-import { DollarSign, TrendingUp, TrendingDown, Plus, FileText } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, Plus, FileText, ShieldAlert } from 'lucide-react'
+import { useAuth } from '../lib/AuthContext'
 
 interface Property {
   id: string
@@ -41,6 +42,20 @@ const CATEGORIES = [
 ]
 
 export function FinancialReports() {
+  const { profile } = useAuth()
+
+  if (profile && profile.role !== 'admin') {
+    return (
+      <div className="page-container">
+        <div style={{ textAlign: 'center', padding: '80px 24px' }}>
+          <ShieldAlert size={48} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 22, marginBottom: 8 }}>Access Restricted</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Financial reports are only available to admin users.</p>
+        </div>
+      </div>
+    )
+  }
+
   const [properties, setProperties] = useState<Property[]>([])
   const [, setLeases] = useState<LeaseInfo[]>([])
   const [pnlData, setPnlData] = useState<PnLRow[]>([])

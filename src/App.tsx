@@ -7,9 +7,12 @@ import { TaskList } from './components/TaskList'
 import { CalendarView } from './components/CalendarView'
 import { ContactList } from './components/ContactList'
 import { FinancialReports } from './components/FinancialReports'
+import { LoginPage } from './components/LoginPage'
+import { AuthProvider, useAuth } from './lib/AuthContext'
 import './styles/index.css'
 
-function App() {
+function AppContent() {
+  const { user, loading } = useAuth()
   const [activeView, setActiveView] = useState('dashboard')
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
 
@@ -21,6 +24,19 @@ function App() {
   const handleBackToProperties = () => {
     setSelectedPropertyId(null)
     setActiveView('properties')
+  }
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner" />
+        <p>Loading...</p>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <LoginPage />
   }
 
   return (
@@ -41,6 +57,14 @@ function App() {
         {activeView === 'reports' && <FinancialReports />}
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 
