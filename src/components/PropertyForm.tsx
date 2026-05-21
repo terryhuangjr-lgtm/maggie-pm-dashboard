@@ -30,6 +30,8 @@ export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps)
     purchase_price: property.purchase_price || '',
     current_market_value: property.current_market_value || '',
     monthly_management_fee: property.monthly_management_fee || '',
+    lease_start: property.lease_start || '',
+    lease_end: property.lease_end || '',
   } : defaultProperty)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
