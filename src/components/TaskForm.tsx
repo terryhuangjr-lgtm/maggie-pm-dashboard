@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseAdmin } from '../lib/supabase'
 
 interface TaskFormProps {
   properties: { id: string, address: string, unit_number: string | null }[]
@@ -70,7 +70,9 @@ export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskF
       if (form.notes) data.notes = form.notes
 
       if (isEdit) {
-        await supabase.from('tasks').update(data).eq('id', task.id)
+        const writeClient = supabaseAdmin || supabase
+        const { error: updateErr } = await writeClient.from('tasks').update(data).eq('id', task.id)
+        if (updateErr) throw updateErr
       } else {
         const { error: insertErr } = await supabase.from('tasks').insert(data)
         if (insertErr) throw insertErr
