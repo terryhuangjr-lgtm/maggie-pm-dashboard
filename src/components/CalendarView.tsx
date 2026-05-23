@@ -338,7 +338,7 @@ export function CalendarView() {
                   <div
                     key={dateStr}
                     onClick={() => {
-                      const custom = dbEvents.find(e => e.event_date === dateStr)
+                      const custom = dbEvents.find(e => e.event_date === dateStr && e.status !== 'cancelled')
                       if (custom) setSelectedEvent(custom)
                       else {
                         setFormData(prev => ({ ...prev, event_date: dateStr }))
@@ -425,7 +425,7 @@ export function CalendarView() {
                   todayMid.setHours(12, 0, 0, 0)
                   const daysUntil = Math.ceil((eventDate.getTime() - todayMid.getTime()) / (1000 * 60 * 60 * 24))
                   const colors = EVENT_COLORS[ev.type] || EVENT_COLORS.appointment
-                  const customEv = ev.id ? dbEvents.find(e => e.id === ev.id) : null
+                  const customEv = ev.id ? dbEvents.find(e => e.id === ev.id && e.status !== 'cancelled') : null
                   return (
                     <div
                       key={`${ev.date}-${i}`}
