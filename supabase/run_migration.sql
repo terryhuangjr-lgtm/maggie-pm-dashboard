@@ -141,7 +141,11 @@ SELECT
   p.unit_number,
   m.month_key,
   m.month_date,
-  COALESCE(ri.total_income, le.monthly_rent, 0) AS rental_income,
+  COALESCE(ri.total_income,
+    CASE WHEN m.month_date <= DATE_TRUNC('month', CURRENT_DATE)
+      THEN le.monthly_rent
+      ELSE 0
+    END, 0) AS rental_income,
   COALESCE(lmf.mgmt_fee, 0) AS mgmt_fee_expense,
   COALESCE(ed.maintenance_cost, 0) AS maintenance_cost,
   COALESCE(ed.tax_expense, 0) AS tax_expense,
