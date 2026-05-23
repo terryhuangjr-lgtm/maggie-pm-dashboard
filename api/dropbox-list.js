@@ -1,18 +1,19 @@
 /**
  * GET /api/dropbox-list
  *
- * Lists files in a property's Dropbox folder.
+ * Lists files in a property's Dropbox folder under /Property Management_MH Group.
  *
  * Query params:
- *   - property (string): property identifier (address + unit)
+ *   - propertyId (string): property UUID from Supabase
+ *   - address (string): property address (fallback for lookup)
  *   - path (string, optional): sub-path within the property folder
  *
  * Returns:
  *   { entries: [...], root: "..." }
  *
  * Environment variables:
- *   - DROPBOX_ACCESS_TOKEN
- *   - DROPBOX_ROOT (default: "/Apps/MH Group PM/MH Group")
+ *   - DROPBOX_ACCESS_TOKEN (set in Vercel)
+ *   - DROPBOX_ROOT (default: "/Property Management_MH Group")
  */
 
 import { dropboxV2Api } from './_dropbox'
@@ -23,14 +24,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { property, path: subpath } = req.query
+    const { propertyId, address, path: subpath } = req.query
+    const property = req.query.property || address
 
-    if (!property) {
-      return res.status(400).json({ error: 'property query param required' })
-    }
+    if (!property && !propertyId) {
+      return res.status(400).json({ error: 'address or propertyId query param required' })
 
-    const root = process.env.DROPBOX_ROOT || '/Apps/MH Group PM/MH Group'
-    const folderPath = `${root}/${sanitizeFolderName(property)}${subpath ? '/' + sanitizeFolderName(subpath) : ''}`
+    // Use address to find the property folder
+    const propertyName = property || propertyId
+    const root = process.env.DROPBOX_ROOT || '/Property Management_MH Group'
+    const folderPath = `${root}/Properties/${sanitizeFolderName(propertyName)}${subpath ? '/' + sanitizeFolderName(subpath) : ''}`
 
     const result = await dropboxV2Api.listFolder({ path: folderPath })
 

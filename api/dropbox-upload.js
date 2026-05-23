@@ -1,26 +1,24 @@
-import { dropboxV2Api } from './_dropbox'
-
 /**
  * POST /api/dropbox-upload
  *
- * Uploads a file to the MH Group Dropbox folder structure.
+ * Uploads a file to the property's folder under /Property Management_MH Group.
  *
  * Expected form fields:
- *   - property (string): property address/unit identifier
- *   - category (string): folder name (e.g., "Lease Documents", "Photos")
+ *   - address (string): property address (used for folder path)
+ *   - category (string): subfolder name (e.g., "Lease Documents", "Photos", "Financials")
  *   - file (binary): the file to upload
  *
  * Returns:
- *   { url: "https://..." } — shared link to the uploaded file
+ *   { success: true, path: "..." , name: "...", url: "..." }
  *
  * Environment variables (set in Vercel):
- *   - DROPBOX_ACCESS_TOKEN: Dropbox API token (long-lived)
- *   - DROPBOX_ROOT: root folder path (default: "/MH Group")
+ *   - DROPBOX_ACCESS_TOKEN
+ *   - DROPBOX_ROOT (default: "/Property Management_MH Group")
  */
 
 export const config = {
   api: {
-    bodyParser: false, // We handle multipart ourselves
+    bodyParser: false,
   },
 }
 
@@ -30,10 +28,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Parse multipart form
     const { Fields, Files } = await parseMultipart(req)
 
-    const propertyId = Fields?.property?.[0] || 'Shared'
+    const address = Fields?.address?.[0] || Fields?.property?.[0] || Fields?.propertyId?.[0] || 'Shared'
     const category = Fields?.category?.[0] || 'Documents'
     const file = Files?.file?.[0]
 
@@ -41,10 +38,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No file provided' })
     }
 
-    const root = process.env.DROPBOX_ROOT || '/MH Group'
-    const folderPath = `${root}/${sanitizeFolderName(propertyId)}/${sanitizeFolderName(category)}`
+    const root = process.env.DROPBOX_ROOT || '/Property Management_MH Group'
+    const folderPath = `${root}/Properties/${sanitizeFolderName(address)}/${sanitizeFolderName(category)}`
     const filename = sanitizeFilename(file.name || 'document.pdf')
     const dropboxPath = `${folderPath}/${filename}`
+
+    // Ensure folder exists
+    await dropboxV2Api.createFolderV2({ path: folderPath }).catch(() => {})
 
     // Upload to Dropbox
     const result = await dropboxV2Api.upload({
@@ -54,7 +54,7 @@ export default async function handler(req, res) {
       autorename: true,
     })
 
-    // Create a shared link
+    // Create a shared link for preview
     let sharedLink = null
     try {
       const linkResult = await dropboxV2Api.sharingCreateSharedLinkWithSettings({
@@ -63,7 +63,6 @@ export default async function handler(req, res) {
       })
       sharedLink = linkResult.url
     } catch {
-      // Link might already exist — get existing
       try {
         const existing = await dropboxV2Api.sharingListSharedLinks({
           path: dropboxPath,
@@ -78,6 +77,7 @@ export default async function handler(req, res) {
       path: dropboxPath,
       url: sharedLink,
       name: filename,
+      size: result.size || file.content.length,
     })
   } catch (err) {
     console.error('Dropbox upload error:', err)
@@ -85,19 +85,13 @@ export default async function handler(req, res) {
   }
 }
 
-/**
- * Parse a multipart form from the raw request body.
- * Uses a lightweight approach without external dependencies.
- */
 async function parseMultipart(req) {
   const contentType = req.headers['content-type'] || ''
   const boundary = contentType.split('boundary=')[1]
   if (!boundary) throw new Error('No boundary in content-type')
 
   const boundaryBuffer = Buffer.from(`--${boundary}`)
-  const endBoundary = Buffer.from(`--${boundary}--`)
 
-  // Collect raw body
   const chunks = []
   for await (const chunk of req) {
     chunks.push(chunk)
@@ -107,34 +101,27 @@ async function parseMultipart(req) {
   const Fields = {}
   const Files = {}
 
-  // Split by boundary
   let pos = 0
   while (pos < body.length) {
     const start = body.indexOf(boundaryBuffer, pos)
     if (start === -1) break
     const sectionStart = start + boundaryBuffer.length
-
-    // Check if this is the end
     if (body.slice(sectionStart, sectionStart + 2).toString() === '--') break
 
-    // Find next boundary
     const nextStart = body.indexOf(boundaryBuffer, sectionStart)
     const section = body.slice(sectionStart, nextStart !== -1 ? nextStart : body.length)
 
-    // Parse headers
     const headerEnd = section.indexOf('\r\n\r\n')
     if (headerEnd === -1) continue
     const headerBlock = section.slice(0, headerEnd).toString()
     const contentStart = headerEnd + 4
-    const content = section.slice(contentStart, section.length - 2) // trim trailing \r\n
+    const content = section.slice(contentStart, section.length - 2)
 
-    // Extract name and filename from Content-Disposition
     const nameMatch = headerBlock.match(/name="([^"]+)"/)
     const filenameMatch = headerBlock.match(/filename="([^"]+)"/)
     const name = nameMatch ? nameMatch[1] : ''
 
     if (filenameMatch) {
-      // It's a file
       if (!Files[name]) Files[name] = []
       Files[name].push({
         name: filenameMatch[1],
@@ -142,7 +129,6 @@ async function parseMultipart(req) {
         contentType: headerBlock.match(/Content-Type:\s*(\S+)/)?.[1] || 'application/octet-stream',
       })
     } else {
-      // It's a field
       if (!Fields[name]) Fields[name] = []
       Fields[name].push(content.toString().trim())
     }
