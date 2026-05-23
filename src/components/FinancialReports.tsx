@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Modal } from './ui/Modal'
-import { DollarSign, TrendingUp, TrendingDown, Plus, FileText, ShieldAlert } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, Plus, FileText, ShieldAlert, ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 
 interface Property {
@@ -41,6 +41,9 @@ const CATEGORIES = [
   { value: 'other', label: 'Other' },
 ]
 
+const currentMonth = new Date().toISOString().slice(0, 7)
+const currentYear = new Date().getFullYear().toString()
+
 export function FinancialReports() {
   const { profile } = useAuth()
 
@@ -60,7 +63,9 @@ export function FinancialReports() {
   const [, setLeases] = useState<LeaseInfo[]>([])
   const [pnlData, setPnlData] = useState<PnLRow[]>([])
   const [selectedProperty, setSelectedProperty] = useState<string>('all')
-  const [selectedMonth, setSelectedMonth] = useState<string>('all')
+  const [selectedYear, setSelectedYear] = useState<string>(currentYear)
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonth)
+  const [expandedProps, setExpandedProps] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [expenseForm, setExpenseForm] = useState({
@@ -88,15 +93,33 @@ export function FinancialReports() {
     }
   }
 
-  // Get unique months from data
-  const availableMonths = [...new Set(pnlData.map(r => r.month_key))].sort()
+  // Available years from data
+  const availableYears = [...new Set(pnlData.map(r => r.month_key.slice(0, 4)))].sort()
+
+  // Months in the selected year
+  const monthsInYear = pnlData
+    .filter(r => r.month_key.startsWith(selectedYear))
+    .map(r => r.month_key)
+  const uniqueMonthsInYear = [...new Set(monthsInYear)].sort()
 
   // Filter data
+  const isYtd = selectedMonth === '__ytd__'
   const filtered = pnlData.filter(r => {
     if (selectedProperty !== 'all' && r.property_id !== selectedProperty) return false
-    if (selectedMonth !== 'all' && r.month_key !== selectedMonth) return false
+    if (isYtd) {
+      if (!r.month_key.startsWith(selectedYear)) return false
+    } else if (selectedMonth !== 'all') {
+      if (r.month_key !== selectedMonth) return false
+    }
     return true
   })
+
+  // Group by property for card layout
+  const groupedByProperty = filtered.reduce<Record<string, PnLRow[]>>((acc, r) => {
+    if (!acc[r.property_id]) acc[r.property_id] = []
+    acc[r.property_id].push(r)
+    return acc
+  }, {})
 
   // Calculate totals
   const totals = filtered.reduce((acc, r) => ({
@@ -112,6 +135,15 @@ export function FinancialReports() {
 
   const totalExpenses = totals.mgmt + totals.maintenance + totals.taxes + totals.insurance + totals.utilities + totals.cc + totals.other
   const netIncome = totals.income - totalExpenses
+
+  function expandProperty(id: string) {
+    setExpandedProps(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   async function handleAddExpense(e: React.FormEvent) {
     e.preventDefault()
@@ -159,7 +191,6 @@ export function FinancialReports() {
       ? `Filtered: ${title}${selectedMonth !== 'all' ? ` — ${selectedMonth}` : ''}`
       : ''
 
-    // Build a printable HTML document
     const rowsHtml = filtered.map(r => {
       const exp = Number(r.mgmt_fee_expense) + Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense)
       const net = Number(r.rental_income) - exp
@@ -175,9 +206,9 @@ export function FinancialReports() {
         <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.cc_expense).toLocaleString()}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.other_expense).toLocaleString()}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right;font-weight:bold">$${exp.toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right;font-weight:bold;color:${net >= 0 ? '#7a9a5a' : '#c0392b'}">$${net.toLocaleString()}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right;font-weight:bold;color:${net >= 0 ? '#7a9a5a' : '#c0392b'}\">$${net.toLocaleString()}</td>
       </tr>`
-    }).join('\n')
+    }).join('\\n')
 
     const totalsRow = `<tr style="background:#f5f5f5;font-weight:bold">
       <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px">TOTAL</td>
@@ -191,7 +222,7 @@ export function FinancialReports() {
       <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.cc.toLocaleString()}</td>
       <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.other.toLocaleString()}</td>
       <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totalExpenses.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right;color:${netIncome >= 0 ? '#7a9a5a' : '#c0392b'}">$${netIncome.toLocaleString()}</td>
+      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right;color:${netIncome >= 0 ? '#7a9a5a' : '#c0392b'}\">$${netIncome.toLocaleString()}</td>
     </tr>`
 
     const html = `<!DOCTYPE html>
@@ -214,7 +245,7 @@ export function FinancialReports() {
   <div class="summary">
     <div class="summary-box"><div class="label">Total Income</div><div class="value" style="color:#7a9a5a">$${totals.income.toLocaleString()}</div></div>
     <div class="summary-box"><div class="label">Total Expenses</div><div class="value" style="color:#c0392b">$${totalExpenses.toLocaleString()}</div></div>
-    <div class="summary-box"><div class="label">Net Income</div><div class="value" style="color:${netIncome >= 0 ? '#7a9a5a' : '#c0392b'}">$${netIncome.toLocaleString()}</div></div>
+    <div class="summary-box"><div class="label">Net Income</div><div class="value" style="color:${netIncome >= 0 ? '#7a9a5a' : '#c0392b'}\">$${netIncome.toLocaleString()}</div></div>
     <div class="summary-box"><div class="label">Margin</div><div class="value">${totals.income > 0 ? Math.round((netIncome / totals.income) * 100) + '%' : '—'}</div></div>
   </div>
   <table>
@@ -235,6 +266,33 @@ export function FinancialReports() {
     win.document.close()
     win.focus()
     setTimeout(() => win.print(), 500)
+  }
+
+  // Helpers for card
+  function calcTotalExpense(r: PnLRow) {
+    return Number(r.mgmt_fee_expense) + Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense)
+  }
+
+  function calcNetRow(r: PnLRow) {
+    return Number(r.rental_income) - calcTotalExpense(r)
+  }
+
+  function expenseEntries(r: PnLRow) {
+    const entries: { label: string; amount: number }[] = []
+    const cats: [string, string][] = [
+      ['mgmt_fee_expense', 'Mgmt Fee'],
+      ['maintenance_cost', 'Maintenance'],
+      ['tax_expense', 'Taxes'],
+      ['insurance_cost', 'Insurance'],
+      ['utilities_cost', 'Utilities'],
+      ['cc_expense', 'CC'],
+      ['other_expense', 'Other'],
+    ]
+    for (const [key, label] of cats) {
+      const amt = Number((r as any)[key])
+      if (amt > 0) entries.push({ label, amount: amt })
+    }
+    return entries
   }
 
   if (loading) return <div className="loading-state"><DollarSign /> <p>Loading financial reports...</p></div>
@@ -264,7 +322,7 @@ export function FinancialReports() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters — Year + Month drill-down */}
       <div className="filter-bar">
         <select style={fieldStyle} value={selectedProperty} onChange={e => setSelectedProperty(e.target.value)}>
           <option value="all">All Properties</option>
@@ -272,11 +330,24 @@ export function FinancialReports() {
             <option key={p.id} value={p.id}>{p.address} {p.unit_number || ''}</option>
           ))}
         </select>
+        <select style={{ ...fieldStyle, maxWidth: 100 }} value={selectedYear} onChange={e => {
+          setSelectedYear(e.target.value)
+          setSelectedMonth(currentMonth)
+        }}>
+          {availableYears.map(y => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
         <select style={{ ...fieldStyle, maxWidth: 150 }} value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
           <option value="all">All Months</option>
-          {availableMonths.map(m => (
-            <option key={m} value={m}>{m}</option>
-          ))}
+          <option value="__ytd__">YTD (Year to Date)</option>
+          {uniqueMonthsInYear.map(m => {
+            const [y, mo] = m.split('-')
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            return (
+              <option key={m} value={m}>{monthNames[parseInt(mo) - 1]} {y}</option>
+            )
+          })}
         </select>
       </div>
 
@@ -313,72 +384,110 @@ export function FinancialReports() {
         </div>
       </div>
 
-      {/* P&L Table */}
-      <div className="card">
-        <div className="card-header"><h3>Profit & Loss</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Property</th>
-                <th>Month</th>
-                <th style={{ textAlign: 'right' }}>Income</th>
-                <th style={{ textAlign: 'right' }}>Mgmt Fee</th>
-                <th style={{ textAlign: 'right' }}>Maintenance</th>
-                <th style={{ textAlign: 'right' }}>Taxes</th>
-                <th style={{ textAlign: 'right' }}>Insurance</th>
-                <th style={{ textAlign: 'right' }}>Utilities</th>
-                <th style={{ textAlign: 'right' }}>CC</th>
-                <th style={{ textAlign: 'right' }}>Other</th>
-                <th style={{ textAlign: 'right' }}>Total Exp</th>
-                <th style={{ textAlign: 'right' }}>Net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={12} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No data for current filters</td></tr>
-              ) : (
-                filtered.map((r, i) => {
-                  const exp = Number(r.mgmt_fee_expense) + Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense)
-                  const net = Number(r.rental_income) - exp
-                  return (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 500 }}>{r.address}{r.unit_number ? ` ${r.unit_number}` : ''}</td>
-                      <td>{r.month_key}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--green)', fontWeight: 600 }}>${Number(r.rental_income).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>${Number(r.mgmt_fee_expense).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>${Number(r.maintenance_cost).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>${Number(r.tax_expense).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>${Number(r.insurance_cost).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>${Number(r.utilities_cost).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>${Number(r.cc_expense).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>${Number(r.other_expense).toLocaleString()}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>${exp.toLocaleString()}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: net >= 0 ? 'var(--green)' : 'var(--red)' }}>${net.toLocaleString()}</td>
-                    </tr>
-                  )
-                })
-              )}
-              {/* Totals row */}
-              {filtered.length > 1 && (
-                <tr style={{ background: 'var(--accent-light)' }}>
-                  <td style={{ fontWeight: 700 }}>TOTAL</td>
-                  <td>{filtered.length} rows</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--green)' }}>${totals.income.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>${totals.mgmt.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>${totals.maintenance.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>${totals.taxes.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>${totals.insurance.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>${totals.utilities.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>${totals.cc.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>${totals.other.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>${totalExpenses.toLocaleString()}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, color: netIncome >= 0 ? 'var(--green)' : 'var(--red)' }}>${netIncome.toLocaleString()}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Property P&L Cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {Object.entries(groupedByProperty).length === 0 ? (
+          <div className="card" style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+            No data for current filters
+          </div>
+        ) : (
+          Object.entries(groupedByProperty).map(([propId, rows]) => {
+            const isExpanded = expandedProps.has(propId)
+            const firstRow = rows[0]
+            const propExpenses = rows.reduce((acc, r) => acc + calcTotalExpense(r), 0)
+            const propIncome = rows.reduce((acc, r) => acc + Number(r.rental_income), 0)
+            const propNet = propIncome - propExpenses
+
+            return (
+              <div key={propId} className="card">
+                {/* Card Header */}
+                <div
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '14px 16px', cursor: 'pointer',
+                    borderBottom: isExpanded ? '1px solid var(--border)' : 'none'
+                  }}
+                  onClick={() => expandProperty(propId)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {isExpanded ? <ChevronDown size={16} style={{ color: 'var(--text-muted)' }} /> : <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />}
+                    <Building2 size={16} style={{ color: 'var(--text-secondary)' }} />
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>
+                      {firstRow.address}{firstRow.unit_number ? ` ${firstRow.unit_number}` : ''}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                      {rows.length} month{rows.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Income</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)' }}>${propIncome.toLocaleString()}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Net</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: propNet >= 0 ? 'var(--green)' : 'var(--red)' }}>${propNet.toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded content: month-by-month breakdown */}
+                {isExpanded && (
+                  <div className="card-body" style={{ padding: '8px 16px 16px' }}>
+                    {rows.map((r) => {
+                      const exp = calcTotalExpense(r)
+                      const net = calcNetRow(r)
+                      const items = expenseEntries(r)
+
+                      return (
+                        <div key={r.month_key} style={{
+                          padding: '12px 0',
+                          borderBottom: '1px solid var(--border)'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            {/* Left: income + net */}
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                                {r.month_key}
+                              </div>
+                              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)', marginBottom: 8 }}>
+                                ${Number(r.rental_income).toLocaleString()}
+                              </div>
+                              {items.length === 0 ? (
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No expenses</div>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                  {items.map(it => (
+                                    <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                                      <div style={{ width: 100, color: 'var(--text-muted)', flexShrink: 0 }}>{it.label}</div>
+                                      <div style={{ color: 'var(--text-secondary)' }}>${it.amount.toLocaleString()}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {items.length > 0 && (
+                                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
+                                  Total Expenses: ${exp.toLocaleString()}
+                                </div>
+                              )}
+                            </div>
+                            {/* Right: net */}
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Net</div>
+                              <div style={{ fontSize: 20, fontWeight: 700, color: net >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                ${net.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
       </div>
 
       {/* Add Expense Modal */}
