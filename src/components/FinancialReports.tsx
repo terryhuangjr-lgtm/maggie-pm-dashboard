@@ -121,11 +121,11 @@ export function FinancialReports() {
         category: expenseForm.category,
         description: expenseForm.description || expenseForm.category.replace(/_/g, ' '),
         amount: parseFloat(expenseForm.amount),
-        expense_date: expenseForm.expense_date,
-        paid_to: expenseForm.paid_to || null,
+        date: expenseForm.expense_date,
+        vendor: expenseForm.paid_to || null,
         notes: expenseForm.notes || null,
       }
-      const { error } = await supabase.from('property_expenses').insert(payload)
+      const { error } = await supabase.from('expenses').insert(payload)
       if (error) throw error
       setShowExpenseForm(false)
       setExpenseForm({

@@ -105,6 +105,13 @@ rental_income AS (
   WHERE p.status = 'received'
   GROUP BY l.property_id, DATE_TRUNC('month', p.payment_date)
 ),
+lease_expected AS (
+  SELECT
+    property_id,
+    monthly_rent
+  FROM leases
+  WHERE status = 'active'
+),
 lease_mgmt_fees AS (
   SELECT
     p.id AS property_id,
@@ -134,7 +141,7 @@ SELECT
   p.unit_number,
   m.month_key,
   m.month_date,
-  COALESCE(ri.total_income, 0) AS rental_income,
+  COALESCE(ri.total_income, le.monthly_rent, 0) AS rental_income,
   COALESCE(lmf.mgmt_fee, 0) AS mgmt_fee_expense,
   COALESCE(ed.maintenance_cost, 0) AS maintenance_cost,
   COALESCE(ed.tax_expense, 0) AS tax_expense,
@@ -145,6 +152,7 @@ SELECT
 FROM properties p
 CROSS JOIN months m
 LEFT JOIN rental_income ri ON ri.property_id = p.id AND ri.month_date = m.month_date
+LEFT JOIN lease_expected le ON le.property_id = p.id
 LEFT JOIN lease_mgmt_fees lmf ON lmf.property_id = p.id AND lmf.month_date = m.month_date
 LEFT JOIN expense_data ed ON ed.property_id = p.id AND ed.month_date = m.month_date
 WHERE p.status = 'active'
