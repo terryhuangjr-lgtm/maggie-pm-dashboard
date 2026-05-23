@@ -45,8 +45,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'property query param required' })
     }
 
-    const root = process.env.DROPBOX_ROOT || '/Property Management_MH Group'
-    const folderPath = `${root}/Properties/${sanitizeName(property)}`
+    // NOTE: DROPBOX_ROOT env var may point to incorrect path in Vercel.
+    // Force the correct root here. Dropbox token stored in Vercel env.
+    const ROOT = '/Property Management_MH Group'
+    const folderPath = `${ROOT}/Properties/${sanitizeName(property)}`
 
     const result = await listFolder(folderPath)
     const entries = (result.entries || []).map(entry => ({
