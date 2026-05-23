@@ -29,6 +29,7 @@ export default async function handler(req, res) {
 
     if (!property && !propertyId) {
       return res.status(400).json({ error: 'address or propertyId query param required' })
+    }
 
     // Use address to find the property folder
     const propertyName = property || propertyId
