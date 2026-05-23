@@ -61,6 +61,7 @@ interface TenantInfo {
 
 interface LeaseInfo {
   id: string
+  tenant_id: string
   lease_start: string
   lease_end: string
   monthly_rent: number
@@ -78,6 +79,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [tenant, setTenant] = useState<TenantInfo | null>(null)
   const [lease, setLease] = useState<LeaseInfo | null>(null)
   const [allTenants, setAllTenants] = useState<any[]>([])
+  const [allLeases, setAllLeases] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [showPropForm, setShowPropForm] = useState(false)
@@ -85,6 +87,9 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [editTenant, setEditTenant] = useState<any>(null)
   const [showLeaseForm, setShowLeaseForm] = useState(false)
   const [editLease, setEditLease] = useState<any>(null)
+  const [showRenewLeaseForm, setShowRenewLeaseForm] = useState(false)
+  const [renewPreset, setRenewPreset] = useState<any>(null)
+  const [showLeaseHistory, setShowLeaseHistory] = useState(false)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
 
   const [expenses, setExpenses] = useState<any[]>([])
@@ -115,15 +120,17 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           .select('*')
           .eq('property_id', propertyId)
           .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
 
-        if (leasesData) {
-          setLease(leasesData)
+        setAllLeases(leasesData || [])
+
+        const currentLease = (leasesData || []).find(l => l.status === 'active') || (leasesData || [])[0] || null
+
+        if (currentLease) {
+          setLease(currentLease)
           const { data: tenantData } = await supabase
             .from('tenants')
             .select('*')
-            .eq('id', leasesData.tenant_id)
+            .eq('id', currentLease.tenant_id)
             .single()
           if (tenantData) setTenant(tenantData)
         }
@@ -133,7 +140,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           .from('expenses')
           .select('*')
           .eq('property_id', propertyId)
-          .order('expense_date', { ascending: false })
+          .order('date', { ascending: false })
           .limit(20)
         if (expData) setExpenses(expData)
       }
@@ -511,9 +518,31 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                   <div className="detail-field-value" style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>
                     ${Number(lease.monthly_rent).toLocaleString()}/mo
                     <button onClick={() => { setEditLease(lease); setShowLeaseForm(true) }} style={{
+
                       background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer',
                       marginLeft: 8, fontSize: 11
                     }}>Edit</button>
+                    <button onClick={() => {
+                      const end = new Date(lease.lease_end)
+                      const newStart = new Date(end.getTime() + 24*60*60*1000)
+                      const newEnd = new Date(newStart.getTime() + 365*24*60*60*1000)
+                      setRenewPreset({
+                        tenant_id: lease.tenant_id || '',
+                        lease_start: newStart.toISOString().split('T')[0],
+                        lease_end: newEnd.toISOString().split('T')[0],
+                        monthly_rent: String(lease.monthly_rent || ''),
+                        security_deposit: String(lease.security_deposit || ''),
+                        rent_due_day: String(lease.rent_due_day || '1'),
+                        auto_renew: true,
+                        status: 'active',
+                        notes: '',
+                      })
+                      setShowRenewLeaseForm(true)
+                    }} style={{
+                      background: 'none', border: '1px solid var(--accent)', borderRadius: 4,
+                      color: 'var(--accent)', cursor: 'pointer',
+                      marginLeft: 8, fontSize: 11, padding: '2px 6px'
+                    }}>Renew</button>
                   </div>
                 </div>
                 )}
@@ -619,7 +648,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 <tbody>
                   {expenses.slice(0, 10).map((e: any) => (
                     <tr key={e.id}>
-                      <td>{e.expense_date ? new Date(e.expense_date).toLocaleDateString() : '—'}</td>
+                      <td>{e.date ? new Date(e.date).toLocaleDateString() : '—'}</td>
                       <td>{e.category?.replace(/_/g, ' ')}</td>
                       <td style={{ fontWeight: 600, color: 'var(--red)' }}>${Number(e.amount || 0).toLocaleString()}</td>
                       <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
@@ -630,6 +659,49 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* Lease History */}
+        {allLeases.length > 1 && (
+          <div className="card">
+            <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => setShowLeaseHistory(!showLeaseHistory)}>
+              <h3>Lease History ({allLeases.length})</h3>
+              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                {showLeaseHistory ? '▲ Hide' : '▼ Show'}
+              </span>
+            </div>
+            {showLeaseHistory && (
+              <div className="card-body">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tenant</th>
+                      <th>Start</th>
+                      <th>End</th>
+                      <th>Rent</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allLeases.map((l: any) => {
+                      const t = allTenants.find(t => t.id === l.tenant_id)
+                      return (
+                        <tr key={l.id} style={{
+                          opacity: l.status === 'active' ? 1 : 0.6
+                        }}>
+                          <td style={{ fontWeight: 500 }}>{t ? `${t.first_name} ${t.last_name}` : '—'}</td>
+                          <td>{l.lease_start ? new Date(l.lease_start).toLocaleDateString() : '—'}</td>
+                          <td>{l.lease_end ? new Date(l.lease_end).toLocaleDateString() : '—'}</td>
+                          <td>${Number(l.monthly_rent || 0).toLocaleString()}</td>
+                          <td><StatusBadge status={l.status} /></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
@@ -719,6 +791,22 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         <LeaseForm propertyId={propertyId} tenants={allTenants} lease={editLease}
           onSaved={() => { setShowLeaseForm(false); setEditLease(null); loadProperty() }}
           onCancel={() => { setShowLeaseForm(false); setEditLease(null) }} />
+      </Modal>
+
+      {/* Renew Lease Modal — pre-populated, custom save expires old lease */}
+      <Modal open={showRenewLeaseForm} onClose={() => { setShowRenewLeaseForm(false); setRenewPreset(null) }}
+        title="Renew Lease" width="560px">
+        {renewPreset && lease && (
+          <LeaseForm propertyId={propertyId} tenants={allTenants} lease={renewPreset}
+            onSaved={async () => {
+              // Expire the old lease
+              await supabase.from('leases').update({ status: 'expired' }).eq('id', lease.id)
+              setShowRenewLeaseForm(false)
+              setRenewPreset(null)
+              loadProperty()
+            }}
+            onCancel={() => { setShowRenewLeaseForm(false); setRenewPreset(null) }} />
+        )}
       </Modal>
 
       <Modal open={showPaymentForm} onClose={() => setShowPaymentForm(false)} title="Log Payment" width="480px">
