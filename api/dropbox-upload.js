@@ -4,22 +4,75 @@
  * Uploads a file to the property's folder under /Property Management_MH Group.
  *
  * Expected form fields:
- *   - address (string): property address (used for folder path)
- *   - category (string): subfolder name (e.g., "Lease Documents", "Photos", "Financials")
+ *   - property (string): property address (used for folder path)
  *   - file (binary): the file to upload
  *
  * Returns:
- *   { success: true, path: "..." , name: "...", url: "..." }
- *
- * Environment variables (set in Vercel):
- *   - DROPBOX_ACCESS_TOKEN
- *   - DROPBOX_ROOT (default: "/Property Management_MH Group")
+ *   { success: true, path: "...", name: "...", url: "..." }
  */
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
+import { dropboxV2Api } from './_dropbox.js'
+
+function sanitizeFolderName(name) {
+  return name.replace(/[<>:"/\\|?*#]/g, '_').trim()
+}
+
+function sanitizeFilename(name) {
+  return name.replace(/[<>:"/\\|?*]/g, '_').trim()
+}
+
+async function parseMultipart(req) {
+  const contentType = req.headers['content-type'] || ''
+  const boundary = contentType.split('boundary=')[1]
+  if (!boundary) throw new Error('No boundary in content-type')
+
+  const chunks = []
+  for await (const chunk of req) {
+    chunks.push(chunk)
+  }
+  const body = Buffer.concat(chunks)
+  const boundaryBuffer = Buffer.from(`--${boundary}`)
+
+  const Fields = {}
+  const Files = {}
+
+  let pos = 0
+  while (pos < body.length) {
+    const start = body.indexOf(boundaryBuffer, pos)
+    if (start === -1) break
+    const sectionStart = start + boundaryBuffer.length
+    if (body.slice(sectionStart, sectionStart + 2).toString() === '--') break
+
+    const nextStart = body.indexOf(boundaryBuffer, sectionStart)
+    const section = body.slice(sectionStart, nextStart !== -1 ? nextStart : body.length)
+
+    const headerEnd = section.indexOf('\r\n\r\n')
+    if (headerEnd === -1) continue
+    const headerBlock = section.slice(0, headerEnd).toString()
+    const contentStart = headerEnd + 4
+    const content = section.slice(contentStart, section.length - 2)
+
+    const nameMatch = headerBlock.match(/name="([^"]+)"/)
+    const filenameMatch = headerBlock.match(/filename="([^"]+)"/)
+    const name = nameMatch ? nameMatch[1] : ''
+
+    if (filenameMatch) {
+      if (!Files[name]) Files[name] = []
+      Files[name].push({
+        name: filenameMatch[1],
+        content,
+        contentType: headerBlock.match(/Content-Type:\s*(\S+)/)?.[1] || 'application/octet-stream',
+      })
+    } else {
+      if (!Fields[name]) Fields[name] = []
+      Fields[name].push(content.toString().trim())
+    }
+
+    if (nextStart === -1) break
+    pos = nextStart
+  }
+
+  return { Fields, Files }
 }
 
 export default async function handler(req, res) {
@@ -30,8 +83,7 @@ export default async function handler(req, res) {
   try {
     const { Fields, Files } = await parseMultipart(req)
 
-    const address = Fields?.address?.[0] || Fields?.property?.[0] || Fields?.propertyId?.[0] || 'Shared'
-    const category = Fields?.category?.[0] || 'Documents'
+    const address = Fields?.property?.[0] || Fields?.address?.[0] || 'Shared'
     const file = Files?.file?.[0]
 
     if (!file) {
@@ -39,7 +91,7 @@ export default async function handler(req, res) {
     }
 
     const root = process.env.DROPBOX_ROOT || '/Property Management_MH Group'
-    const folderPath = `${root}/Properties/${sanitizeFolderName(address)}/${sanitizeFolderName(category)}`
+    const folderPath = `${root}/Properties/${sanitizeFolderName(address)}`
     const filename = sanitizeFilename(file.name || 'document.pdf')
     const dropboxPath = `${folderPath}/${filename}`
 
@@ -85,65 +137,8 @@ export default async function handler(req, res) {
   }
 }
 
-async function parseMultipart(req) {
-  const contentType = req.headers['content-type'] || ''
-  const boundary = contentType.split('boundary=')[1]
-  if (!boundary) throw new Error('No boundary in content-type')
-
-  const boundaryBuffer = Buffer.from(`--${boundary}`)
-
-  const chunks = []
-  for await (const chunk of req) {
-    chunks.push(chunk)
-  }
-  const body = Buffer.concat(chunks)
-
-  const Fields = {}
-  const Files = {}
-
-  let pos = 0
-  while (pos < body.length) {
-    const start = body.indexOf(boundaryBuffer, pos)
-    if (start === -1) break
-    const sectionStart = start + boundaryBuffer.length
-    if (body.slice(sectionStart, sectionStart + 2).toString() === '--') break
-
-    const nextStart = body.indexOf(boundaryBuffer, sectionStart)
-    const section = body.slice(sectionStart, nextStart !== -1 ? nextStart : body.length)
-
-    const headerEnd = section.indexOf('\r\n\r\n')
-    if (headerEnd === -1) continue
-    const headerBlock = section.slice(0, headerEnd).toString()
-    const contentStart = headerEnd + 4
-    const content = section.slice(contentStart, section.length - 2)
-
-    const nameMatch = headerBlock.match(/name="([^"]+)"/)
-    const filenameMatch = headerBlock.match(/filename="([^"]+)"/)
-    const name = nameMatch ? nameMatch[1] : ''
-
-    if (filenameMatch) {
-      if (!Files[name]) Files[name] = []
-      Files[name].push({
-        name: filenameMatch[1],
-        content,
-        contentType: headerBlock.match(/Content-Type:\s*(\S+)/)?.[1] || 'application/octet-stream',
-      })
-    } else {
-      if (!Fields[name]) Fields[name] = []
-      Fields[name].push(content.toString().trim())
-    }
-
-    if (nextStart === -1) break
-    pos = nextStart
-  }
-
-  return { Fields, Files }
-}
-
-function sanitizeFolderName(name) {
-  return name.replace(/[<>:"/\\|?*#]/g, '_').trim()
-}
-
-function sanitizeFilename(name) {
-  return name.replace(/[<>:"/\\|?*]/g, '_').trim()
+export const config = {
+  api: {
+    bodyParser: false,
+  },
 }

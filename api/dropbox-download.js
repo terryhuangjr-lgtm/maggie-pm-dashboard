@@ -1,17 +1,16 @@
 /**
  * GET /api/dropbox-download
  *
- * Gets a temporary download link or returns file contents for preview.
+ * Gets a temporary download link for a file.
  *
  * Query params:
  *   - path (string): full Dropbox path to the file
- *   - preview (string): "true" to return a temporary link (default), "raw" to proxy content
  *
  * Returns:
- *   { url: "..." } or raw file content (for images/PDFs)
+ *   { url: "...", name: "..." }
  */
 
-import { dropboxV2Api } from './_dropbox'
+import { dropboxV2Api } from './_dropbox.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -19,13 +18,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { path, preview } = req.query
+    const { path } = req.query
 
     if (!path) {
       return res.status(400).json({ error: 'path query param required' })
     }
 
-    // Return a temporary link
     const link = await dropboxV2Api.getTemporaryLink({ path })
     return res.status(200).json({ url: link.link, name: path.split('/').pop() })
   } catch (err) {

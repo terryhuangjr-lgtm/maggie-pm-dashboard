@@ -4,9 +4,7 @@
  * Lists files in a property's Dropbox folder under /Property Management_MH Group.
  *
  * Query params:
- *   - propertyId (string): property UUID from Supabase
- *   - address (string): property address (fallback for lookup)
- *   - path (string, optional): sub-path within the property folder
+ *   - property (string): property address (used for folder path lookup)
  *
  * Returns:
  *   { entries: [...], root: "..." }
@@ -16,7 +14,11 @@
  *   - DROPBOX_ROOT (default: "/Property Management_MH Group")
  */
 
-import { dropboxV2Api } from './_dropbox'
+import { dropboxV2Api } from './_dropbox.js'
+
+function sanitizeFolderName(name) {
+  return name.replace(/[<>:"/\\|?*#]/g, '_').trim()
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -24,17 +26,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { propertyId, address, path: subpath } = req.query
-    const property = req.query.property || address
+    const property = req.query.property || req.query.address
 
-    if (!property && !propertyId) {
-      return res.status(400).json({ error: 'address or propertyId query param required' })
+    if (!property) {
+      return res.status(400).json({ error: 'property query param required' })
     }
 
-    // Use address to find the property folder
-    const propertyName = property || propertyId
     const root = process.env.DROPBOX_ROOT || '/Property Management_MH Group'
-    const folderPath = `${root}/Properties/${sanitizeFolderName(propertyName)}${subpath ? '/' + sanitizeFolderName(subpath) : ''}`
+    const folderPath = `${root}/Properties/${sanitizeFolderName(property)}`
 
     const result = await dropboxV2Api.listFolder({ path: folderPath })
 
@@ -55,8 +54,4 @@ export default async function handler(req, res) {
     console.error('Dropbox list error:', err)
     return res.status(500).json({ error: err.message || 'List failed' })
   }
-}
-
-function sanitizeFolderName(name) {
-  return name.replace(/[<>:"/\\|?*#]/g, '_').trim()
 }
