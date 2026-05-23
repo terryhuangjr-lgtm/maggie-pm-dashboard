@@ -115,6 +115,25 @@ export function TaskList() {
     }
   }
 
+  async function undoComplete(taskId: string, title: string) {
+    try {
+      await supabase.from('tasks').update({
+        status: 'pending',
+        completed_at: null
+      }).eq('id', taskId)
+      await supabase.from('activity_log').insert({
+        action: 'Task restored',
+        details: `Restored from completed: ${title}`,
+        source: 'manual'
+      })
+      // Refresh both lists
+      loadTasks()
+      loadCompletedTasks()
+    } catch (err) {
+      console.error('Failed to restore task:', err)
+    }
+  }
+
   const filtered = tasks.filter(t => {
     if (filter === 'overdue' && t.due_date && new Date(t.due_date) >= new Date()) return false
     if (filter === 'today' && t.due_date && new Date(t.due_date).toDateString() !== new Date().toDateString()) return false
@@ -251,10 +270,22 @@ export function TaskList() {
                     <span style={{ color: 'var(--green)' }}>✓</span>
                     <span style={{ textDecoration: 'line-through' }}>{t.title}</span>
                     {t.completed_at && (
-                      <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 'auto' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 8 }}>
                         {new Date(t.completed_at).toLocaleDateString()}
                       </span>
                     )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); undoComplete(t.id, t.title) }}
+                      style={{
+                        marginLeft: 'auto',
+                        background: 'none', border: '1px solid var(--border)',
+                        borderRadius: 6, padding: '2px 8px', cursor: 'pointer',
+                        color: 'var(--accent)', fontSize: 11, fontWeight: 600
+                      }}
+                      title="Restore to pending"
+                    >
+                      Undo
+                    </button>
                   </div>
                 ))}
               </div>
