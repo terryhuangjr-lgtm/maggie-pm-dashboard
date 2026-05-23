@@ -164,7 +164,12 @@ export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskF
 
       <div style={{ marginTop: 12 }}>
         <label style={labelStyle}>Assigned To</label>
-        <input style={fieldStyle} value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)} placeholder="Contractor, Maggie, etc." />
+        <select style={fieldStyle} value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}>
+          <option value="">— Unassigned —</option>
+          <option value="Maggie">Maggie</option>
+          <option value="James">James</option>
+          <option value="Jenna">Jenna</option>
+        </select>
       </div>
 
       <div style={{ marginTop: 12 }}>
