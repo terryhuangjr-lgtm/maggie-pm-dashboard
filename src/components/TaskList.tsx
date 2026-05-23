@@ -183,7 +183,11 @@ export function TaskList() {
                 {updating === t.id ? '...' : ''}
               </button>
               <div style={{ flex: 1, cursor: 'pointer' }}
-                onClick={() => { setEditTask(t); setShowForm(true) }}>
+                onClick={async () => {
+                  const { data } = await supabase.from('tasks').select('*').eq('id', t.id).single()
+                  setEditTask(data || t)
+                  setShowForm(true)
+                }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <span className={`priority-dot priority-${t.priority}`} />
                   <span style={{ fontWeight: 600 }}>{t.title}</span>
