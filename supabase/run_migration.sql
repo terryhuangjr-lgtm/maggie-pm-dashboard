@@ -141,7 +141,7 @@ SELECT
   m.month_key,
   m.month_date,
   COALESCE(ri.total_income,
-    CASE WHEN m.month_date <= DATE_TRUNC('month', CURRENT_DATE)
+    CASE WHEN m.month_date = DATE_TRUNC('month', CURRENT_DATE)
       THEN le.monthly_rent
       ELSE 0
     END, 0) AS rental_income,
