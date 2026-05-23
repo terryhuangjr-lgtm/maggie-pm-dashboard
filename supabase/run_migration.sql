@@ -106,11 +106,10 @@ rental_income AS (
   GROUP BY l.property_id, DATE_TRUNC('month', p.payment_date)
 ),
 lease_expected AS (
-  SELECT
-    property_id,
-    monthly_rent
+  SELECT DISTINCT ON (property_id) property_id, monthly_rent
   FROM leases
   WHERE status = 'active'
+  ORDER BY property_id, created_at DESC
 ),
 lease_mgmt_fees AS (
   SELECT
