@@ -17,7 +17,9 @@ const defaultProperty = {
   cc_payment_method: '', cc_platform: '', electric_billing: '',
   e_bill_platform: '', re_tax_schedule: '', lease_term_display: '',
   lease_document_url: '', renewal_notice_date: '',
-  lease_start: '', lease_end: ''
+  lease_start: '', lease_end: '',
+  parking_spot: '', monthly_parking_fee: '', storage_unit: '',
+  pet_policy: 'Not Allowed', pet_deposit: '',
 }
 
 export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps) {
@@ -32,6 +34,8 @@ export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps)
     monthly_management_fee: property.monthly_management_fee || '',
     lease_start: property.lease_start || '',
     lease_end: property.lease_end || '',
+    monthly_parking_fee: property.monthly_parking_fee || '',
+    pet_deposit: property.pet_deposit || '',
   } : defaultProperty)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -79,7 +83,6 @@ export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps)
       if (form.building_management_company) data.building_management_company = form.building_management_company
       if (form.building_management_contact) data.building_management_contact = form.building_management_contact
       if (form.notes) data.notes = form.notes
-      // New fields from MHG spreadsheet
       if (form.cc_payment_method) data.cc_payment_method = form.cc_payment_method
       if (form.cc_platform) data.cc_platform = form.cc_platform
       if (form.electric_billing) data.electric_billing = form.electric_billing
@@ -90,6 +93,11 @@ export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps)
       if (form.renewal_notice_date) data.renewal_notice_date = form.renewal_notice_date
       if (form.lease_start) data.lease_start = form.lease_start
       if (form.lease_end) data.lease_end = form.lease_end
+      if (form.parking_spot) data.parking_spot = form.parking_spot
+      if (form.monthly_parking_fee) data.monthly_parking_fee = parseFloat(form.monthly_parking_fee)
+      if (form.storage_unit) data.storage_unit = form.storage_unit
+      data.pet_policy = form.pet_policy
+      if (form.pet_deposit) data.pet_deposit = parseFloat(form.pet_deposit)
 
       if (isEdit) {
         await supabase.from('properties').update(data).eq('id', property.id)
@@ -273,7 +281,40 @@ export function PropertyForm({ property, onSaved, onCancel }: PropertyFormProps)
         <label style={labelStyle}>Contact</label>
         <input style={fieldStyle} value={form.building_management_contact} onChange={e => set('building_management_contact', e.target.value)} placeholder="Phone or name" />
       </div>
-      <div style={{ marginTop: 12 }}>
+
+      <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '16px 0' }} />
+      <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text-secondary)' }}>Property Extras</h4>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          <label style={labelStyle}>Parking Spot</label>
+          <input style={fieldStyle} value={form.parking_spot} onChange={e => set('parking_spot', e.target.value)} placeholder="e.g. Garage #12" />
+        </div>
+        <div>
+          <label style={labelStyle}>Monthly Parking Fee ($)</label>
+          <input style={fieldStyle} type="number" value={form.monthly_parking_fee} onChange={e => set('monthly_parking_fee', e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>Storage Unit</label>
+          <input style={fieldStyle} value={form.storage_unit} onChange={e => set('storage_unit', e.target.value)} placeholder="e.g. Basement #4" />
+        </div>
+        <div>
+          <label style={labelStyle}>Pet Policy</label>
+          <select style={fieldStyle} value={form.pet_policy} onChange={e => set('pet_policy', e.target.value)}>
+            <option value="Not Allowed">Not Allowed</option>
+            <option value="Allowed">Allowed</option>
+            <option value="Case by Case">Case by Case</option>
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Pet Deposit ($)</label>
+          <input style={fieldStyle} type="number" value={form.pet_deposit} onChange={e => set('pet_deposit', e.target.value)} />
+        </div>
+      </div>
+
+      <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '16px 0' }} />
+
+      <div>
         <label style={labelStyle}>Notes</label>
         <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={form.notes} onChange={e => set('notes', e.target.value)} />
       </div>

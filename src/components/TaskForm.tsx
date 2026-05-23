@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { supabase, supabaseAdmin } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 
 interface TaskFormProps {
   properties: { id: string, address: string, unit_number: string | null }[]
@@ -61,18 +61,16 @@ export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskF
         task_type: form.task_type,
         priority: form.priority,
         status: form.status,
-        description: form.description || null,
-        due_date: form.due_date || null,
-        assigned_to: form.assigned_to || null,
-        notes: form.notes || null,
-        property_id: form.property_id || null,
-        tenant_id: form.tenant_id || null
       }
+      if (form.property_id) data.property_id = form.property_id
+      if (form.tenant_id) data.tenant_id = form.tenant_id
+      if (form.description) data.description = form.description
+      if (form.due_date) data.due_date = form.due_date
+      if (form.assigned_to) data.assigned_to = form.assigned_to
+      if (form.notes) data.notes = form.notes
 
       if (isEdit) {
-        const writeClient = supabaseAdmin || supabase
-        const { error: updateErr } = await writeClient.from('tasks').update(data).eq('id', task.id)
-        if (updateErr) throw updateErr
+        await supabase.from('tasks').update(data).eq('id', task.id)
       } else {
         const { error: insertErr } = await supabase.from('tasks').insert(data)
         if (insertErr) throw insertErr

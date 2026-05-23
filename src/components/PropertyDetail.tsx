@@ -35,6 +35,11 @@ interface FullProperty {
   renewal_notice_date: string | null
   lease_start: string | null
   lease_end: string | null
+  parking_spot: string | null
+  monthly_parking_fee: number | null
+  storage_unit: string | null
+  pet_policy: string | null
+  pet_deposit: number | null
 }
 
 interface TenantInfo {
@@ -44,8 +49,14 @@ interface TenantInfo {
   email: string | null
   phone: string | null
   move_in_date: string | null
+  move_out_date: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
+  status: string
+  guarantor_name: string | null
+  guarantor_phone: string | null
+  guarantor_email: string | null
+  guarantor_relationship: string | null
 }
 
 interface LeaseInfo {
@@ -56,6 +67,10 @@ interface LeaseInfo {
   security_deposit: number | null
   rent_due_day: number
   status: string
+  deposit_returned_date: string | null
+  deposit_returned_amount: number | null
+  deposit_deductions: number | null
+  deposit_deduction_notes: string | null
 }
 
 export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onBack: () => void }) {
@@ -71,6 +86,8 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [showLeaseForm, setShowLeaseForm] = useState(false)
   const [editLease, setEditLease] = useState<any>(null)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
+
+  const [expenses, setExpenses] = useState<any[]>([])
 
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -110,6 +127,15 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
             .single()
           if (tenantData) setTenant(tenantData)
         }
+
+        // Load expenses
+        const { data: expData } = await supabase
+          .from('expenses')
+          .select('*')
+          .eq('property_id', propertyId)
+          .order('expense_date', { ascending: false })
+          .limit(20)
+        if (expData) setExpenses(expData)
       }
     } catch (err) {
       console.error('Failed to load property:', err)
@@ -232,6 +258,38 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 <div className="detail-field-label">Notes</div>
                 <div className="detail-field-value">{property.notes}</div>
               </div>
+            )}
+
+            {(property.parking_spot || property.storage_unit || property.pet_policy) && (
+              <>
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                  <div className="detail-field-label" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 8 }}>Property Extras</div>
+                </div>
+                {property.parking_spot && (
+                  <div className="detail-field">
+                    <div className="detail-field-label">Parking Spot</div>
+                    <div className="detail-field-value">
+                      {property.parking_spot}
+                      {property.monthly_parking_fee ? ` ($${Number(property.monthly_parking_fee).toLocaleString()}/mo)` : ''}
+                    </div>
+                  </div>
+                )}
+                {property.storage_unit && (
+                  <div className="detail-field">
+                    <div className="detail-field-label">Storage Unit</div>
+                    <div className="detail-field-value">{property.storage_unit}</div>
+                  </div>
+                )}
+                {property.pet_policy && property.pet_policy !== 'Not Allowed' && (
+                  <div className="detail-field">
+                    <div className="detail-field-label">Pet Policy</div>
+                    <div className="detail-field-value">
+                      {property.pet_policy}
+                      {property.pet_deposit ? ` ($${Number(property.pet_deposit).toLocaleString()} deposit)` : ''}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -385,6 +443,40 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                     <div className="detail-field-value">{tenant.emergency_contact_name} {tenant.emergency_contact_phone ? `(${tenant.emergency_contact_phone})` : ''}</div>
                   </div>
                 )}
+                {tenant.status === 'former' && tenant.move_out_date && (
+                  <div className="detail-field">
+                    <div className="detail-field-label">Move Out Date</div>
+                    <div className="detail-field-value" style={{ color: 'var(--red)' }}>{new Date(tenant.move_out_date).toLocaleDateString()}</div>
+                  </div>
+                )}
+                {(tenant.guarantor_name || tenant.guarantor_phone || tenant.guarantor_email) && (
+                  <>
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                      <div className="detail-field-label" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 8 }}>Guarantor</div>
+                    </div>
+                    {tenant.guarantor_name && (
+                      <div className="detail-field">
+                        <div className="detail-field-label">Name</div>
+                        <div className="detail-field-value">
+                          {tenant.guarantor_name}
+                          {tenant.guarantor_relationship ? ` (${tenant.guarantor_relationship})` : ''}
+                        </div>
+                      </div>
+                    )}
+                    {tenant.guarantor_phone && (
+                      <div className="detail-field">
+                        <div className="detail-field-label">Phone</div>
+                        <div className="detail-field-value">{tenant.guarantor_phone}</div>
+                      </div>
+                    )}
+                    {tenant.guarantor_email && (
+                      <div className="detail-field">
+                        <div className="detail-field-label">Email</div>
+                        <div className="detail-field-value">{tenant.guarantor_email}</div>
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             ) : (
               <div className="empty-state" style={{ padding: '24px 12px' }}>
@@ -456,6 +548,37 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                   </div>
                 </div>
 
+                {/* Deposit return info for expired/terminated leases */}
+                {lease.deposit_returned_date && (
+                  <>
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                      <div className="detail-field-label" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 8 }}>Deposit Return</div>
+                    </div>
+                    <div className="detail-field">
+                      <div className="detail-field-label">Returned Date</div>
+                      <div className="detail-field-value">{new Date(lease.deposit_returned_date).toLocaleDateString()}</div>
+                    </div>
+                    {lease.deposit_returned_amount && (
+                      <div className="detail-field">
+                        <div className="detail-field-label">Amount Returned</div>
+                        <div className="detail-field-value" style={{ color: 'var(--green)' }}>${Number(lease.deposit_returned_amount).toLocaleString()}</div>
+                      </div>
+                    )}
+                    {lease.deposit_deductions && Number(lease.deposit_deductions) > 0 && (
+                      <div className="detail-field">
+                        <div className="detail-field-label">Deductions</div>
+                        <div className="detail-field-value" style={{ color: 'var(--red)' }}>${Number(lease.deposit_deductions).toLocaleString()}</div>
+                      </div>
+                    )}
+                    {lease.deposit_deduction_notes && (
+                      <div className="detail-field">
+                        <div className="detail-field-label">Deduction Notes</div>
+                        <div className="detail-field-value" style={{ fontSize: 12 }}>{lease.deposit_deduction_notes}</div>
+                      </div>
+                    )}
+                  </>
+                )}
+
                 {isAdmin && (
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                   <button
@@ -475,6 +598,40 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
             )}
           </div>
         </div>
+
+        {/* Expenses Card */}
+        {expenses.length > 0 && (
+          <div className="card">
+            <div className="card-header"><h3>Expenses</h3></div>
+            <div className="card-body">
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                Recent expenses for this property
+              </div>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Amount</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenses.slice(0, 10).map((e: any) => (
+                    <tr key={e.id}>
+                      <td>{e.expense_date ? new Date(e.expense_date).toLocaleDateString() : '—'}</td>
+                      <td>{e.category?.replace(/_/g, ' ')}</td>
+                      <td style={{ fontWeight: 600, color: 'var(--red)' }}>${Number(e.amount || 0).toLocaleString()}</td>
+                      <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                        {e.description || e.vendor || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="card">
           <div className="card-header"><h3>Files</h3></div>

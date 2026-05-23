@@ -174,6 +174,27 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
         />
       </div>
 
+      {/* Late Rent Alert Banner */}
+      {data.paymentsLate > 0 && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', gap: 10
+        }}>
+          <AlertTriangle size={18} style={{ color: 'var(--red)', flexShrink: 0 }} />
+          <div>
+            <span style={{ fontWeight: 600, color: 'var(--red)', fontSize: 13 }}>
+              {data.paymentsLate} unit{data.paymentsLate > 1 ? 's' : ''} with late rent
+            </span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginLeft: 6 }}>
+              — {data.monthlyRentExpected > 0
+                ? `${Math.round((1 - data.monthlyRentCollected / data.monthlyRentExpected) * 100)}% of expected rent uncollected`
+                : 'Review overdue payments'}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="dashboard-grid">
         {/* Lease Expirations */}
         <div className="card">
