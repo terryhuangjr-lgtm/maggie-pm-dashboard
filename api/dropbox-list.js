@@ -2,22 +2,36 @@
  * GET /api/dropbox-list
  *
  * Lists files in a property's Dropbox folder under /Property Management_MH Group.
- *
- * Query params:
- *   - property (string): property address (used for folder path lookup)
- *
- * Returns:
- *   { entries: [...], root: "..." }
- *
- * Environment variables:
- *   - DROPBOX_ACCESS_TOKEN (set in Vercel)
- *   - DROPBOX_ROOT (default: "/Property Management_MH Group")
+ * Self-contained — no local imports.
  */
 
-import { dropboxV2Api } from './_dropbox.js'
+const API_BASE = 'https://api.dropboxapi.com/2'
 
-function sanitizeFolderName(name) {
-  return name.replace(/[<>:"/\\|?*#]/g, '_').trim()
+function sanitizeName(name) {
+  return String(name || '').replace(/[<>:"/\\|?*#]/g, '_').trim()
+}
+
+function getToken() {
+  const token = process.env.DROPBOX_ACCESS_TOKEN
+  if (!token) throw new Error('DROPBOX_ACCESS_TOKEN not set')
+  return token
+}
+
+async function listFolder(path = '') {
+  const res = await fetch(`${API_BASE}/files/list_folder`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, limit: 200 }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    if (res.status === 409) throw Object.assign(new Error('not_found'), { status: 409 })
+    throw new Error(`Dropbox list failed (${res.status}): ${text}`)
+  }
+  return res.json()
 }
 
 export default async function handler(req, res) {
@@ -27,16 +41,14 @@ export default async function handler(req, res) {
 
   try {
     const property = req.query.property || req.query.address
-
     if (!property) {
       return res.status(400).json({ error: 'property query param required' })
     }
 
     const root = process.env.DROPBOX_ROOT || '/Property Management_MH Group'
-    const folderPath = `${root}/Properties/${sanitizeFolderName(property)}`
+    const folderPath = `${root}/Properties/${sanitizeName(property)}`
 
-    const result = await dropboxV2Api.listFolder({ path: folderPath })
-
+    const result = await listFolder(folderPath)
     const entries = (result.entries || []).map(entry => ({
       name: entry.name,
       path: entry.path_display || entry.path_lower,
@@ -47,8 +59,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ entries, root: folderPath })
   } catch (err) {
-    // Folder might not exist yet — return empty
-    if (err.message?.includes('not_found') || err.message?.includes('409')) {
+    if (err.message === 'not_found' || err.status === 409) {
       return res.status(200).json({ entries: [], root: '' })
     }
     console.error('Dropbox list error:', err)

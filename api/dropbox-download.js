@@ -2,15 +2,32 @@
  * GET /api/dropbox-download
  *
  * Gets a temporary download link for a file.
- *
- * Query params:
- *   - path (string): full Dropbox path to the file
- *
- * Returns:
- *   { url: "...", name: "..." }
+ * Self-contained — no local imports.
  */
 
-import { dropboxV2Api } from './_dropbox.js'
+const API_BASE = 'https://api.dropboxapi.com/2'
+
+function getToken() {
+  const token = process.env.DROPBOX_ACCESS_TOKEN
+  if (!token) throw new Error('DROPBOX_ACCESS_TOKEN not set')
+  return token
+}
+
+async function getTemporaryLink(path) {
+  const res = await fetch(`${API_BASE}/files/get_temporary_link`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Dropbox temp link failed (${res.status}): ${text}`)
+  }
+  return res.json()
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -19,12 +36,9 @@ export default async function handler(req, res) {
 
   try {
     const { path } = req.query
+    if (!path) return res.status(400).json({ error: 'path query param required' })
 
-    if (!path) {
-      return res.status(400).json({ error: 'path query param required' })
-    }
-
-    const link = await dropboxV2Api.getTemporaryLink({ path })
+    const link = await getTemporaryLink(path)
     return res.status(200).json({ url: link.link, name: path.split('/').pop() })
   } catch (err) {
     console.error('Dropbox download error:', err)

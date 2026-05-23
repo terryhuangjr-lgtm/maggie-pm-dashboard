@@ -2,23 +2,84 @@
  * POST /api/dropbox-upload
  *
  * Uploads a file to the property's folder under /Property Management_MH Group.
- *
- * Expected form fields:
- *   - property (string): property address (used for folder path)
- *   - file (binary): the file to upload
- *
- * Returns:
- *   { success: true, path: "...", name: "...", url: "..." }
+ * Self-contained — no local imports.
  */
 
-import { dropboxV2Api } from './_dropbox.js'
+const API_BASE = 'https://api.dropboxapi.com/2'
+const CONTENT_BASE = 'https://content.dropboxapi.com/2'
 
-function sanitizeFolderName(name) {
-  return name.replace(/[<>:"/\\|?*#]/g, '_').trim()
+function sanitizeName(name) {
+  return String(name || '').replace(/[<>:"/\\|?*#]/g, '_').trim()
 }
 
-function sanitizeFilename(name) {
-  return name.replace(/[<>:"/\\|?*]/g, '_').trim()
+function getToken() {
+  const token = process.env.DROPBOX_ACCESS_TOKEN
+  if (!token) throw new Error('DROPBOX_ACCESS_TOKEN not set')
+  return token
+}
+
+async function createFolder(path) {
+  const res = await fetch(`${API_BASE}/files/create_folder_v2`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, autorename: false }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    if (text.includes('conflict')) return null
+    throw new Error(`Dropbox create folder failed (${res.status}): ${text}`)
+  }
+  return res.json()
+}
+
+async function uploadFile(path, contents) {
+  const res = await fetch(`${CONTENT_BASE}/files/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getToken()}`,
+      'Content-Type': 'application/octet-stream',
+      'Dropbox-API-Arg': JSON.stringify({ path, mode: 'add', autorename: true, mute: true }),
+    },
+    body: contents,
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Dropbox upload failed (${res.status}): ${text}`)
+  }
+  return res.json()
+}
+
+async function createSharedLink(path) {
+  const res = await fetch(`${API_BASE}/sharing/create_shared_link_with_settings`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, settings: { requested_visibility: { '.tag': 'shared' } } }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    if (text.includes('shared_link_already_exists')) return null
+    throw new Error(`Dropbox link failed (${res.status}): ${text}`)
+  }
+  return res.json()
+}
+
+async function listSharedLinks(path) {
+  const res = await fetch(`${API_BASE}/sharing/list_shared_links`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path, direct_only: true }),
+  })
+  if (!res.ok) return null
+  return res.json()
 }
 
 async function parseMultipart(req) {
@@ -27,16 +88,14 @@ async function parseMultipart(req) {
   if (!boundary) throw new Error('No boundary in content-type')
 
   const chunks = []
-  for await (const chunk of req) {
-    chunks.push(chunk)
-  }
+  for await (const chunk of req) chunks.push(chunk)
   const body = Buffer.concat(chunks)
   const boundaryBuffer = Buffer.from(`--${boundary}`)
 
   const Fields = {}
   const Files = {}
-
   let pos = 0
+
   while (pos < body.length) {
     const start = body.indexOf(boundaryBuffer, pos)
     if (start === -1) break
@@ -45,13 +104,12 @@ async function parseMultipart(req) {
 
     const nextStart = body.indexOf(boundaryBuffer, sectionStart)
     const section = body.slice(sectionStart, nextStart !== -1 ? nextStart : body.length)
-
     const headerEnd = section.indexOf('\r\n\r\n')
     if (headerEnd === -1) continue
+
     const headerBlock = section.slice(0, headerEnd).toString()
     const contentStart = headerEnd + 4
     const content = section.slice(contentStart, section.length - 2)
-
     const nameMatch = headerBlock.match(/name="([^"]+)"/)
     const filenameMatch = headerBlock.match(/filename="([^"]+)"/)
     const name = nameMatch ? nameMatch[1] : ''
@@ -82,53 +140,32 @@ export default async function handler(req, res) {
 
   try {
     const { Fields, Files } = await parseMultipart(req)
-
     const address = Fields?.property?.[0] || Fields?.address?.[0] || 'Shared'
     const file = Files?.file?.[0]
 
-    if (!file) {
-      return res.status(400).json({ error: 'No file provided' })
-    }
+    if (!file) return res.status(400).json({ error: 'No file provided' })
 
     const root = process.env.DROPBOX_ROOT || '/Property Management_MH Group'
-    const folderPath = `${root}/Properties/${sanitizeFolderName(address)}`
-    const filename = sanitizeFilename(file.name || 'document.pdf')
-    const dropboxPath = `${folderPath}/${filename}`
+    const folderPath = `${root}/Properties/${sanitizeName(address)}`
+    const dropboxPath = `${folderPath}/${sanitizeName(file.name || 'document.pdf')}`
 
-    // Ensure folder exists
-    await dropboxV2Api.createFolderV2({ path: folderPath }).catch(() => {})
+    await createFolder(folderPath)
+    const result = await uploadFile(dropboxPath, file.content)
 
-    // Upload to Dropbox
-    const result = await dropboxV2Api.upload({
-      path: dropboxPath,
-      contents: file.content,
-      mode: 'add',
-      autorename: true,
-    })
-
-    // Create a shared link for preview
     let sharedLink = null
     try {
-      const linkResult = await dropboxV2Api.sharingCreateSharedLinkWithSettings({
-        path: dropboxPath,
-        settings: { requested_visibility: { '.tag': 'shared' } },
-      })
-      sharedLink = linkResult.url
+      const linkResult = await createSharedLink(dropboxPath)
+      sharedLink = linkResult?.url || null
     } catch {
-      try {
-        const existing = await dropboxV2Api.sharingListSharedLinks({
-          path: dropboxPath,
-          direct_only: true,
-        })
-        sharedLink = existing.links?.[0]?.url || null
-      } catch {}
+      const existing = await listSharedLinks(dropboxPath)
+      sharedLink = existing?.links?.[0]?.url || null
     }
 
     return res.status(200).json({
       success: true,
       path: dropboxPath,
       url: sharedLink,
-      name: filename,
+      name: sanitizeName(file.name || 'document.pdf'),
       size: result.size || file.content.length,
     })
   } catch (err) {
