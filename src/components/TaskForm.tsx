@@ -10,9 +10,10 @@ interface TaskFormProps {
 }
 
 const taskTypes = [
-  'lease_renewal', 'rent_collection', 'maintenance_request',
-  'inspection', 'board_application', 'move_in', 'move_out',
-  'owner_report', 'general', 'follow_up'
+  'repairs', 'inspection', 'lease_renewal',
+  'payment_followup', 'lease_break', 'tenant_move_in',
+  'tenant_move_out', 'rent_followup', 'emergency',
+  'bookkeeping', 'general', 'owner_report'
 ]
 
 export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskFormProps) {

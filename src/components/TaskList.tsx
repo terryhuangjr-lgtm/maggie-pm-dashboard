@@ -143,7 +143,12 @@ export function TaskList() {
     return t.task_type === typeFilter
   })
 
-  const taskTypes = [...new Set(tasks.map(t => t.task_type).filter(Boolean))]
+  const CATEGORIES = [
+    'repairs', 'inspection', 'lease_renewal',
+    'payment_followup', 'lease_break', 'tenant_move_in',
+    'tenant_move_out', 'rent_followup', 'emergency',
+    'bookkeeping', 'general', 'owner_report'
+  ]
 
   if (loading) return <div className="loading-state"><Clock /> <p>Loading tasks...</p></div>
 
@@ -171,11 +176,11 @@ export function TaskList() {
 
       <div className="filter-bar">
         <button className={`filter-btn ${typeFilter === 'all' ? 'active' : ''}`} onClick={() => setTypeFilter('all')}>All Types</button>
-        {taskTypes.map(type => (
+        {CATEGORIES.map(type => (
           <button key={type}
             className={`filter-btn ${typeFilter === type ? 'active' : ''}`}
             onClick={() => setTypeFilter(type)}>
-            {type.replace(/_/g, ' ')}
+            {type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
           </button>
         ))}
       </div>
