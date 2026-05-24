@@ -322,9 +322,9 @@ export function CalendarView() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
         {/* Calendar Grid */}
-        <div className="card" style={{ flex: 1, minWidth: 320 }}>
+        <div className="card" style={{ flex: 1, minWidth: 400 }}>
           <div className="card-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <button className="filter-btn" onClick={() => { setCurrentDate(new Date(year, month - 1, 1)) }}>
@@ -337,9 +337,9 @@ export function CalendarView() {
             </div>
           </div>
           <div className="card-body" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 2, minWidth: 350 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, minWidth: 420 }}>
               {dayNames.map(d => (
-                <div key={d} style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', padding: '8px 0' }}>
+                <div key={d} style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', padding: '10px 0' }}>
                   {d}
                 </div>
               ))}
@@ -356,7 +356,7 @@ export function CalendarView() {
                     className={`calendar-day ${d.other ? 'other-month' : ''}`}
                     onClick={() => setSelectedDate(lookupStr)}
                     style={{
-                      minHeight: 90,
+                      minHeight: 110,
                       background: isSelected
                         ? 'var(--accent-light)'
                         : isToday
@@ -376,33 +376,33 @@ export function CalendarView() {
                     }}
                   >
                     <div style={{
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: isToday ? 700 : 500,
                       color: isToday ? 'var(--accent)' : 'var(--text-primary)',
-                      marginBottom: 2
+                      marginBottom: 4
                     }}>
                       {d.day}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      {dayEvts.slice(0, 4).map((ev: any, ei: number) => {
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {dayEvts.slice(0, 5).map((ev: any, ei: number) => {
                         const colors = EVENT_COLORS[ev.type as keyof typeof EVENT_COLORS] || EVENT_COLORS.appointment
                         return (
                           <div
                             key={ei}
                             style={{
-                              fontSize: 9,
-                              padding: '1px 3px',
-                              borderRadius: 2,
+                              fontSize: 10,
+                              padding: '2px 4px',
+                              borderRadius: 3,
                               background: colors.bg,
                               color: colors.color,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
-                              lineHeight: '14px'
+                              lineHeight: '16px'
                             }}
                             title={`${ev.label} — ${ev.property}`}
                           >
-                            {ev.label.substring(0, 12)}
+                            {ev.label.substring(0, 16)}
                           </div>
                         )
                       })}
@@ -427,11 +427,11 @@ export function CalendarView() {
         </div>
 
         {/* Selected Day Events List */}
-        <div className="card" style={{ width: 340, flexShrink: 0, maxHeight: 700, overflow: 'auto' }}>
+        <div className="card" style={{ width: 440, flexShrink: 0, maxHeight: 800, overflow: 'auto' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3>
               {selectedDate
-                ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
                 : 'Select a day'}
             </h3>
             {selectedDate && (
@@ -458,26 +458,26 @@ export function CalendarView() {
                     <div
                       key={`${ev.date}-${i}`}
                       style={{
-                        padding: 10,
+                        padding: 14,
                         borderRadius: 8,
                         background: 'var(--bg-primary)',
                         border: '1px solid var(--border)',
                         borderLeft: `3px solid ${colors.dot}`
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                         <div style={{ flex: 1, cursor: isEditable ? 'pointer' : 'default' }}
                           onClick={() => isEditable && openEditEvent(ev._dbEvent)}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <span style={{ color: colors.color }}>{eventIcons[ev.type] || <Clock size={14} />}</span>
-                            <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>{ev.label}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{ev.label}</span>
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>
+                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 3 }}>
                             {ev.property}
                           </div>
                           {ev.details && (
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                               {ev.details}
                             </div>
                           )}
