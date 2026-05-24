@@ -59,6 +59,7 @@ export function FinancialReports() {
     )
   }
 
+  const [viewMode, setViewMode] = useState<'owner' | 'internal'>('owner')
   const [properties, setProperties] = useState<Property[]>([])
   const [, setLeases] = useState<LeaseInfo[]>([])
   const [pnlData, setPnlData] = useState<PnLRow[]>([])
@@ -92,7 +93,6 @@ export function FinancialReports() {
       setLoading(false)
     }
   }
-
   // Available years from data
   const availableYears = [...new Set(pnlData.map(r => r.month_key.slice(0, 4)))].sort()
 
@@ -135,7 +135,9 @@ export function FinancialReports() {
 
   const totalExpenses = totals.mgmt + totals.maintenance + totals.taxes + totals.insurance + totals.utilities + totals.cc + totals.other
   const netIncome = totals.income - totalExpenses
-
+  const ownerExpenses = totals.maintenance + totals.taxes + totals.insurance + totals.utilities + totals.cc + totals.other
+  const netToOwner = totals.income - totals.mgmt - ownerExpenses
+  const isOwner = viewMode === 'owner'
   function expandProperty(id: string) {
     setExpandedProps(prev => {
       const next = new Set(prev)
@@ -170,7 +172,6 @@ export function FinancialReports() {
       alert('Failed to save expense: ' + err.message)
     }
   }
-
   const fieldStyle: React.CSSProperties = {
     width: '100%', padding: '8px 12px', borderRadius: 8,
     border: '1px solid var(--border)', background: 'var(--bg-primary)',
@@ -183,70 +184,146 @@ export function FinancialReports() {
   }
 
   function exportPdf() {
-    const title = selectedProperty !== 'all'
-      ? `P&L — ${properties.find(p => p.id === selectedProperty)?.address} ${properties.find(p => p.id === selectedProperty)?.unit_number || ''}`
-      : 'P&L — All Properties'
-    const subtitle = selectedMonth !== 'all' ? `Month: ${selectedMonth}` : 'All Months'
-    const filterLabel = selectedProperty !== 'all' || selectedMonth !== 'all'
-      ? `Filtered: ${title}${selectedMonth !== 'all' ? ` — ${selectedMonth}` : ''}`
-      : ''
+    const period = selectedMonth !== 'all' ? selectedMonth : 'All Months'
+    let html = ''
 
-    const rowsHtml = filtered.map(r => {
-      const exp = Number(r.mgmt_fee_expense) + Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense)
-      const net = Number(r.rental_income) - exp
-      return `<tr>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px">${r.address} ${r.unit_number || ''}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px">${r.month_key}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.rental_income).toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.mgmt_fee_expense).toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.maintenance_cost).toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.tax_expense).toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.insurance_cost).toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.utilities_cost).toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.cc_expense).toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.other_expense).toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right;font-weight:bold">$${exp.toLocaleString()}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right;font-weight:bold;color:${net >= 0 ? '#7a9a5a' : '#c0392b'}\">$${net.toLocaleString()}</td>
+    if (isOwner) {
+      // --- Owner Statement PDF ---
+      const title = selectedProperty !== 'all'
+        ? `MH Group — Property Statement | ${properties.find(p => p.id === selectedProperty)?.address} ${properties.find(p => p.id === selectedProperty)?.unit_number || ''} | ${period}`
+        : `MH Group — Property Statement | All Properties | ${period}`
+      const subtitle = 'Prepared by: Maggie Huang Group Property Management'
+
+      const rowsHtml = filtered.map(r => {
+        const mgmt = Number(r.mgmt_fee_expense)
+        const opexp = Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense)
+        const net = Number(r.rental_income) - mgmt - opexp
+        return `<tr>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px">${r.address} ${r.unit_number || ''}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px">${r.month_key}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.rental_income).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right;color:#b8975a;font-weight:600">$${mgmt.toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.maintenance_cost).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.tax_expense).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.insurance_cost).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.cc_expense).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.utilities_cost).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.other_expense).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right;font-weight:bold;color:${net >= 0 ? '#7a9a5a' : '#c0392b'}">$${net.toLocaleString()}</td>
+        </tr>`
+      }).join('\n')
+
+      const totalsRow = `<tr style="background:#f5f5f5;font-weight:bold">
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px">TOTAL</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px"></td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.income.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right;color:#b8975a;font-weight:600">$${totals.mgmt.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.maintenance.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.taxes.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.insurance.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.cc.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.utilities.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.other.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right;color:${netToOwner >= 0 ? '#7a9a5a' : '#c0392b'}">$${netToOwner.toLocaleString()}</td>
       </tr>`
-    }).join('\\n')
 
-    const totalsRow = `<tr style="background:#f5f5f5;font-weight:bold">
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px">TOTAL</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px"></td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.income.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.mgmt.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.maintenance.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.taxes.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.insurance.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.utilities.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.cc.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.other.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totalExpenses.toLocaleString()}</td>
-      <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right;color:${netIncome >= 0 ? '#7a9a5a' : '#c0392b'}\">$${netIncome.toLocaleString()}</td>
-    </tr>`
-
-    const html = `<!DOCTYPE html>
+      html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
   @page { margin: 20mm 15mm; }
   body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 0; }
-  h1 { font-size: 22px; margin-bottom: 4px; color: #b8975a; }
-  .subtitle { font-size: 13px; color: #6b6560; margin-bottom: 20px; }
+  h1 { font-size: 20px; margin-bottom: 4px; color: #b8975a; }
+  .subtitle { font-size: 12px; color: #6b6560; margin-bottom: 20px; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; padding: 8px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9c958e; border-bottom: 2px solid #333; font-weight: 600; }
+  th { text-align: left; padding: 8px 10px; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #9c958e; border-bottom: 2px solid #333; font-weight: 600; }
   .summary { display: flex; gap: 16px; margin-bottom: 20px; }
   .summary-box { flex: 1; text-align: center; padding: 12px; background: #fafafa; border: 1px solid #e8e6e1; border-radius: 6px; }
-  .summary-box .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #9c958e; margin-bottom: 4px; }
-  .summary-box .value { font-size: 20px; font-weight: bold; }
+  .summary-box .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #9c958e; margin-bottom: 4px; }
+  .summary-box .value { font-size: 18px; font-weight: bold; }
   .footer { margin-top: 24px; font-size: 10px; color: #9c958e; text-align: center; }
 </style></head><body>
-  <h1>MH Group — ${title}</h1>
-  <div class="subtitle">${subtitle}${filterLabel ? '<br>' + filterLabel : ''} | Generated ${new Date().toLocaleDateString()}</div>
+  <h1>${title}</h1>
+  <div class="subtitle">${subtitle} | Generated ${new Date().toLocaleDateString()}</div>
   <div class="summary">
-    <div class="summary-box"><div class="label">Total Income</div><div class="value" style="color:#7a9a5a">$${totals.income.toLocaleString()}</div></div>
-    <div class="summary-box"><div class="label">Total Expenses</div><div class="value" style="color:#c0392b">$${totalExpenses.toLocaleString()}</div></div>
-    <div class="summary-box"><div class="label">Net Income</div><div class="value" style="color:${netIncome >= 0 ? '#7a9a5a' : '#c0392b'}\">$${netIncome.toLocaleString()}</div></div>
-    <div class="summary-box"><div class="label">Margin</div><div class="value">${totals.income > 0 ? Math.round((netIncome / totals.income) * 100) + '%' : '—'}</div></div>
+    <div class="summary-box"><div class="label">Gross Rental Income</div><div class="value" style="color:#7a9a5a">$${totals.income.toLocaleString()}</div></div>
+    <div class="summary-box"><div class="label">MHG Management Fee</div><div class="value" style="color:#b8975a">$${totals.mgmt.toLocaleString()}</div></div>
+    <div class="summary-box"><div class="label">Net to Owner</div><div class="value" style="color:${netToOwner >= 0 ? '#7a9a5a' : '#c0392b'}">$${netToOwner.toLocaleString()}</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Property</th><th>Month</th><th style="text-align:right">Gross Rent</th><th style="text-align:right;color:#b8975a">MHG Mgmt Fee</th>
+      <th style="text-align:right">Maint</th><th style="text-align:right">Taxes</th><th style="text-align:right">Insur</th>
+      <th style="text-align:right">CC</th><th style="text-align:right">Util</th><th style="text-align:right">Other</th>
+      <th style="text-align:right">Net to Owner</th>
+    </tr></thead>
+    <tbody>${rowsHtml}${totalsRow}</tbody>
+  </table>
+  <div class="footer">Prepared by MH Group Property Management — Confidential</div>
+</body></html>`
+
+    } else {
+      // --- Internal P&L PDF ---
+      const title = selectedProperty !== 'all'
+        ? `MH Group — Internal P&L | ${properties.find(p => p.id === selectedProperty)?.address} ${properties.find(p => p.id === selectedProperty)?.unit_number || ''} | ${period}`
+        : `MH Group — Internal P&L | ${period}`
+      const subtitle = 'CONFIDENTIAL — Internal Use Only'
+
+      const rowsHtml = filtered.map(r => {
+        const exp = Number(r.mgmt_fee_expense) + Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense)
+        const net = Number(r.rental_income) - exp
+        return `<tr>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px">${r.address} ${r.unit_number || ''}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px">${r.month_key}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.rental_income).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.mgmt_fee_expense).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.maintenance_cost).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.tax_expense).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.insurance_cost).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.utilities_cost).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.cc_expense).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right">$${Number(r.other_expense).toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right;font-weight:bold">$${exp.toLocaleString()}</td>
+          <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:12px;text-align:right;font-weight:bold;color:${net >= 0 ? '#7a9a5a' : '#c0392b'}">$${net.toLocaleString()}</td>
+        </tr>`
+      }).join('\n')
+
+      const totalsRow = `<tr style="background:#f5f5f5;font-weight:bold">
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px">TOTAL</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px"></td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.income.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.mgmt.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.maintenance.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.taxes.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.insurance.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.utilities.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.cc.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totals.other.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right">$${totalExpenses.toLocaleString()}</td>
+        <td style="padding:8px 10px;border-bottom:2px solid #333;font-size:13px;text-align:right;color:${netIncome >= 0 ? '#7a9a5a' : '#c0392b'}">$${netIncome.toLocaleString()}</td>
+      </tr>`
+
+      html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { margin: 20mm 15mm; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 0; }
+  h1 { font-size: 20px; margin-bottom: 4px; color: #b8975a; }
+  .subtitle { font-size: 12px; color: #6b6560; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 8px 10px; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #9c958e; border-bottom: 2px solid #333; font-weight: 600; }
+  .summary { display: flex; gap: 16px; margin-bottom: 20px; }
+  .summary-box { flex: 1; text-align: center; padding: 12px; background: #fafafa; border: 1px solid #e8e6e1; border-radius: 6px; }
+  .summary-box .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #9c958e; margin-bottom: 4px; }
+  .summary-box .value { font-size: 18px; font-weight: bold; }
+  .footer { margin-top: 24px; font-size: 10px; color: #9c958e; text-align: center; }
+</style></head><body>
+  <h1>${title}</h1>
+  <div class="subtitle">${subtitle} | Generated ${new Date().toLocaleDateString()}</div>
+  <div class="summary">
+    <div class="summary-box"><div class="label">Gross Rental Income</div><div class="value" style="color:#7a9a5a">$${totals.income.toLocaleString()}</div></div>
+    <div class="summary-box"><div class="label">MHG Revenue</div><div class="value" style="color:#7a9a5a">$${totals.mgmt.toLocaleString()}</div></div>
+    <div class="summary-box"><div class="label">Owner Expenses</div><div class="value" style="color:#b8975a">$${ownerExpenses.toLocaleString()}</div></div>
+    <div class="summary-box"><div class="label">Owner Net</div><div class="value" style="color:${netToOwner >= 0 ? '#1a1a1a' : '#c0392b'}">$${netToOwner.toLocaleString()}</div></div>
   </div>
   <table>
     <thead><tr>
@@ -257,8 +334,9 @@ export function FinancialReports() {
     </tr></thead>
     <tbody>${rowsHtml}${totalsRow}</tbody>
   </table>
-  <div class="footer">MH Group — Property Management | Confidential</div>
+  <div class="footer">MH Group — Internal Document. Not for distribution.</div>
 </body></html>`
+    }
 
     const win = window.open('', '_blank')
     if (!win) { alert('Please allow pop-ups for PDF export'); return }
@@ -270,31 +348,38 @@ export function FinancialReports() {
 
   // Helpers for card
   function calcTotalExpense(r: PnLRow) {
-    return Number(r.mgmt_fee_expense) + Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense)
+    return Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense)
   }
 
   function calcNetRow(r: PnLRow) {
-    return Number(r.rental_income) - calcTotalExpense(r)
+    return Number(r.rental_income) - Number(r.mgmt_fee_expense) - calcTotalExpense(r)
+  }
+
+  function calcMgmtFee(r: PnLRow) {
+    return Number(r.mgmt_fee_expense)
   }
 
   function expenseEntries(r: PnLRow) {
-    const entries: { label: string; amount: number }[] = []
+    const entries: { label: string; amount: number; isMgmt: boolean }[] = []
+    if (isOwner) {
+      // Owner view: mgmt fee first, then other expenses
+      const mgmt = calcMgmtFee(r)
+      if (mgmt > 0) entries.push({ label: 'MHG Management Fee', amount: mgmt, isMgmt: true })
+    }
     const cats: [string, string][] = [
-      ['mgmt_fee_expense', 'Mgmt Fee'],
       ['maintenance_cost', 'Maintenance'],
-      ['tax_expense', 'Taxes'],
+      ['tax_expense', 'Real Estate Tax'],
       ['insurance_cost', 'Insurance'],
       ['utilities_cost', 'Utilities'],
-      ['cc_expense', 'CC'],
+      ['cc_expense', 'Common Charges'],
       ['other_expense', 'Other'],
     ]
     for (const [key, label] of cats) {
       const amt = Number((r as any)[key])
-      if (amt > 0) entries.push({ label, amount: amt })
+      if (amt > 0) entries.push({ label, amount: amt, isMgmt: false })
     }
     return entries
   }
-
   if (loading) return <div className="loading-state"><DollarSign /> <p>Loading financial reports...</p></div>
 
   return (
@@ -302,9 +387,30 @@ export function FinancialReports() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1>Financial Reports</h1>
-          <p>Monthly P&L by property</p>
+          <p>{isOwner ? 'Owner view — statement for property owners' : 'Internal view — MHG revenue and P&L'}</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {/* View toggle */}
+          <div style={{
+            display: 'flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden'
+          }}>
+            <button
+              onClick={() => setViewMode('owner')}
+              style={{
+                padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                background: isOwner ? 'var(--accent)' : 'transparent',
+                color: isOwner ? '#fff' : 'var(--text-secondary)',
+              }}
+            >Owner View</button>
+            <button
+              onClick={() => setViewMode('internal')}
+              style={{
+                padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                background: !isOwner ? 'var(--accent)' : 'transparent',
+                color: !isOwner ? '#fff' : 'var(--text-secondary)',
+              }}
+            >Internal View</button>
+          </div>
           <button onClick={exportPdf} style={{
             padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
             background: 'transparent', color: 'var(--text-secondary)', fontWeight: 600,
@@ -352,37 +458,66 @@ export function FinancialReports() {
       </div>
 
       {/* Summary Cards */}
-      <div className="stats-grid" style={{ marginBottom: 24 }}>
-        <div className="card">
-          <div className="card-body" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Total Income</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>${totals.income.toLocaleString()}</div>
+      {isOwner ? (
+        <div className="stats-grid" style={{ marginBottom: 24 }}>
+          <div className="card">
+            <div className="card-body" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Gross Rental Income</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>${totals.income.toLocaleString()}</div>
+            </div>
           </div>
-        </div>
-        <div className="card">
-          <div className="card-body" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Total Expenses</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--red)' }}>${totalExpenses.toLocaleString()}</div>
+          <div className="card">
+            <div className="card-body" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>MHG Management Fee</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>${totals.mgmt.toLocaleString()}</div>
+            </div>
           </div>
-        </div>
-        <div className="card">
-          <div className="card-body" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Net Income</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: netIncome >= 0 ? 'var(--green)' : 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              {netIncome >= 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
-              ${netIncome.toLocaleString()}
+          <div className="card">
+            <div className="card-body" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Total Expenses</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--red)' }}>${ownerExpenses.toLocaleString()}</div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-body" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Net to Owner</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: netToOwner >= 0 ? 'var(--green)' : 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {netToOwner >= 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
+                ${netToOwner.toLocaleString()}
+              </div>
             </div>
           </div>
         </div>
-        <div className="card">
-          <div className="card-body" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Margin</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: netIncome >= 0 ? 'var(--green)' : 'var(--red)' }}>
-              {totals.income > 0 ? `${Math.round((netIncome / totals.income) * 100)}%` : '—'}
+      ) : (
+        <div className="stats-grid" style={{ marginBottom: 24 }}>
+          <div className="card">
+            <div className="card-body" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Gross Rental Income</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>${totals.income.toLocaleString()}</div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-body" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>MHG Revenue</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>${totals.mgmt.toLocaleString()}</div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-body" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Owner Expenses Paid</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>${ownerExpenses.toLocaleString()}</div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-body" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Owner Net</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: netToOwner >= 0 ? 'var(--text-primary)' : 'var(--red)' }}>
+                ${netToOwner.toLocaleString()}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Property P&L Cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -394,9 +529,10 @@ export function FinancialReports() {
           Object.entries(groupedByProperty).map(([propId, rows]) => {
             const isExpanded = expandedProps.has(propId)
             const firstRow = rows[0]
-            const propExpenses = rows.reduce((acc, r) => acc + calcTotalExpense(r), 0)
+            const propOwnerExpenses = rows.reduce((acc, r) => acc + calcTotalExpense(r), 0)
+            const propMgmtFee = rows.reduce((acc, r) => acc + Number(r.mgmt_fee_expense), 0)
             const propIncome = rows.reduce((acc, r) => acc + Number(r.rental_income), 0)
-            const propNet = propIncome - propExpenses
+            const propNet = propIncome - propMgmtFee - propOwnerExpenses
 
             return (
               <div key={propId} className="card">
@@ -420,12 +556,24 @@ export function FinancialReports() {
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                    {!isOwner && propMgmtFee > 0 && (
+                      <span style={{
+                        background: 'var(--green)', color: '#fff', fontSize: 11,
+                        padding: '2px 8px', borderRadius: 6, fontWeight: 600
+                      }}>
+                        MHG Fee: ${propMgmtFee.toLocaleString()}
+                      </span>
+                    )}
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Income</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {isOwner ? 'Gross Rent' : 'Income'}
+                      </div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)' }}>${propIncome.toLocaleString()}</div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Net</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {isOwner ? 'Net to Owner' : 'Owner Net'}
+                      </div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: propNet >= 0 ? 'var(--green)' : 'var(--red)' }}>${propNet.toLocaleString()}</div>
                     </div>
                   </div>
@@ -435,7 +583,8 @@ export function FinancialReports() {
                 {isExpanded && (
                   <div className="card-body" style={{ padding: '8px 16px 16px' }}>
                     {rows.map((r) => {
-                      const exp = calcTotalExpense(r)
+                      const mgmt = calcMgmtFee(r)
+                      const opexp = calcTotalExpense(r)
                       const net = calcNetRow(r)
                       const items = expenseEntries(r)
 
@@ -445,35 +594,70 @@ export function FinancialReports() {
                           borderBottom: '1px solid var(--border)'
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            {/* Left: income + net */}
-                            <div>
+                            <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
                                 {r.month_key}
                               </div>
-                              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)', marginBottom: 8 }}>
-                                ${Number(r.rental_income).toLocaleString()}
-                              </div>
-                              {items.length === 0 ? (
-                                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No expenses</div>
-                              ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                  {items.map(it => (
-                                    <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                                      <div style={{ width: 100, color: 'var(--text-muted)', flexShrink: 0 }}>{it.label}</div>
-                                      <div style={{ color: 'var(--text-secondary)' }}>${it.amount.toLocaleString()}</div>
-                                    </div>
-                                  ))}
+
+                              {/* Owner Statement layout */}
+                              {isOwner ? (
+                                <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                                  <div style={{ color: 'var(--green)', fontWeight: 700, fontSize: 15, marginBottom: 6 }}>
+                                    Gross Rental Income        ${Number(r.rental_income).toLocaleString()}
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginLeft: 16, marginBottom: 4 }}>
+                                    {items.map(it => (
+                                      <div key={it.label} style={{
+                                        display: 'flex',
+                                        color: it.isMgmt ? 'var(--accent)' : 'var(--text-secondary)',
+                                        fontWeight: it.isMgmt ? 600 : 400,
+                                      }}>
+                                        <span style={{ width: 140, flexShrink: 0 }}>
+                                          {it.isMgmt ? '—' : '—'} {it.label}
+                                        </span>
+                                        <span>   -${it.amount.toLocaleString()}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div style={{
+                                    borderTop: '1px solid var(--text-secondary)', marginTop: 6, paddingTop: 4,
+                                    fontWeight: 700, color: net >= 0 ? 'var(--green)' : 'var(--red)',
+                                    fontSize: 15
+                                  }}>
+                                    Net to Owner               ${net.toLocaleString()}
+                                  </div>
                                 </div>
-                              )}
-                              {items.length > 0 && (
-                                <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
-                                  Total Expenses: ${exp.toLocaleString()}
+                              ) : (
+                                /* Internal view — flat list */
+                                <div>
+                                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)', marginBottom: 8 }}>
+                                    ${Number(r.rental_income).toLocaleString()}
+                                  </div>
+                                  {items.length === 0 ? (
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No expenses</div>
+                                  ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                      {items.map(it => (
+                                        <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                                          <div style={{ width: 140, color: 'var(--text-muted)', flexShrink: 0 }}>{it.label}</div>
+                                          <div style={{ color: 'var(--text-secondary)' }}>${it.amount.toLocaleString()}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {(items.length > 0 || mgmt > 0) && (
+                                    <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
+                                      Total Expenses: ${(mgmt + opexp).toLocaleString()}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
                             {/* Right: net */}
-                            <div style={{ textAlign: 'right' }}>
-                              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Net</div>
+                            <div style={{ textAlign: 'right', marginLeft: 24 }}>
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+                                {isOwner ? 'Net to Owner' : 'Net'}
+                              </div>
                               <div style={{ fontSize: 20, fontWeight: 700, color: net >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                 ${net.toLocaleString()}
                               </div>
