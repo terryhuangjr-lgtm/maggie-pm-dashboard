@@ -1,5 +1,7 @@
-import { LayoutDashboard, Building2, ListTodo, Calendar, BookOpen, DollarSign, LogOut, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import { LayoutDashboard, Building2, ListTodo, Calendar, BookOpen, DollarSign, LogOut, ShieldCheck, KeyRound } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
+import { ChangePasswordModal } from './ChangePasswordModal'
 
 interface SidebarProps {
   activeView: string
@@ -8,6 +10,7 @@ interface SidebarProps {
 
 export function Sidebar({ activeView, onNavigate }: SidebarProps) {
   const { profile, signOut } = useAuth()
+  const [showChangePassword, setShowChangePassword] = useState(false)
   const isAdmin = profile?.role === 'admin'
 
   const navItems = [
@@ -20,34 +23,46 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
   ]
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-logo">
-        <span>MH Group</span>
-      </div>
-      <nav className="sidebar-nav">
-        {navItems.map(item => (
-          <button
-            key={item.id}
-            className={`nav-item ${activeView === item.id ? 'active' : ''}`}
-            onClick={() => onNavigate(item.id)}
-          >
-            <item.icon />
-            <span>{item.label}</span>
+    <>
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <span>MH Group</span>
+        </div>
+        <nav className="sidebar-nav">
+          {navItems.map(item => (
+            <button
+              key={item.id}
+              className={`nav-item ${activeView === item.id ? 'active' : ''}`}
+              onClick={() => onNavigate(item.id)}
+            >
+              <item.icon />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          {profile && (
+            <>
+              <div className="sidebar-user">
+                <span className="sidebar-user-name">{profile.full_name || 'User'}</span>
+              </div>
+              <div className="sidebar-role">
+                <ShieldCheck size={12} />
+                <span>{profile.role === 'admin' ? 'Admin' : 'Basic'}</span>
+              </div>
+            </>
+          )}
+          <button className="nav-item" onClick={() => setShowChangePassword(true)}>
+            <KeyRound size={16} />
+            <span>Change Password</span>
           </button>
-        ))}
-      </nav>
-      <div className="sidebar-footer">
-        {profile && (
-          <div className="sidebar-role">
-            <ShieldCheck size={12} />
-            <span>{profile.role === 'admin' ? 'Admin' : 'Basic'}</span>
-          </div>
-        )}
-        <button className="nav-item logout-btn" onClick={signOut}>
-          <LogOut size={16} />
-          <span>Sign Out</span>
-        </button>
-      </div>
-    </aside>
+          <button className="nav-item logout-btn" onClick={signOut}>
+            <LogOut size={16} />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </aside>
+      <ChangePasswordModal open={showChangePassword} onClose={() => setShowChangePassword(false)} />
+    </>
   )
 }

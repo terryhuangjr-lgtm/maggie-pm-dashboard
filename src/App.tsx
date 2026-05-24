@@ -12,7 +12,7 @@ import { AuthProvider, useAuth } from './lib/AuthContext'
 import './styles/index.css'
 
 function AppContent() {
-  const { user, loading } = useAuth()
+  const { user, loading, profile, showInactivityWarning, dismissInactivityWarning } = useAuth()
   const [activeView, setActiveView] = useState('dashboard')
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
 
@@ -39,8 +39,18 @@ function AppContent() {
     return <LoginPage />
   }
 
+  const isAdmin = profile?.role === 'admin'
+
   return (
     <div className="app-layout">
+      {showInactivityWarning && (
+        <div className="inactivity-warning">
+          <span>Your session will expire in 1 minute due to inactivity.</span>
+          <button onClick={dismissInactivityWarning} className="btn btn-small">
+            Stay Signed In
+          </button>
+        </div>
+      )}
       <Sidebar activeView={activeView} onNavigate={(v) => {
         setActiveView(v)
         setSelectedPropertyId(null)
@@ -54,7 +64,14 @@ function AppContent() {
         {activeView === 'tasks' && <TaskList />}
         {activeView === 'calendar' && <CalendarView />}
         {activeView === 'contacts' && <ContactList />}
-        {activeView === 'reports' && <FinancialReports />}
+        {activeView === 'reports' && (
+          isAdmin ? <FinancialReports /> : (
+            <div className="access-restricted">
+              <h2>Access Restricted</h2>
+              <p>You do not have permission to view this page.</p>
+            </div>
+          )
+        )}
       </main>
     </div>
   )
