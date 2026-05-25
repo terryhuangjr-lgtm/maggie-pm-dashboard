@@ -160,7 +160,8 @@ export function TaskList() {
     'repairs', 'inspection', 'lease_renewal',
     'payment_followup', 'lease_break', 'tenant_move_in',
     'tenant_move_out', 'rent_followup', 'emergency',
-    'bookkeeping', 'general', 'owner_report'
+    'bookkeeping', 'general', 'owner_report',
+    'cleaning', 'lease_signing'
   ]
 
   if (loading) return <div className="loading-state"><Clock /> <p>Loading tasks...</p></div>

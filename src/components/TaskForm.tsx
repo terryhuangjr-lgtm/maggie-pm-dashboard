@@ -13,7 +13,8 @@ const taskTypes = [
   'repairs', 'inspection', 'lease_renewal',
   'payment_followup', 'lease_break', 'tenant_move_in',
   'tenant_move_out', 'rent_followup', 'emergency',
-  'bookkeeping', 'general', 'owner_report'
+  'bookkeeping', 'general', 'owner_report',
+  'cleaning', 'lease_signing'
 ]
 
 export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskFormProps) {
