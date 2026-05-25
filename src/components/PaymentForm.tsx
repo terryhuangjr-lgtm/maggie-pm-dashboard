@@ -6,18 +6,21 @@ interface PaymentFormProps {
   leaseId: string
   tenantId?: string | null
   rentAmount: number
+  payment?: any | null         // if provided, edit mode
   onSaved: () => void
   onCancel: () => void
 }
 
-export function PaymentForm({ propertyId, leaseId, tenantId, rentAmount, onSaved, onCancel }: PaymentFormProps) {
+export function PaymentForm({ propertyId, leaseId, tenantId, rentAmount, payment, onSaved, onCancel }: PaymentFormProps) {
+  const isEdit = !!payment
   const [form, setForm] = useState({
-    amount: rentAmount.toString(),
-    payment_type: 'rent',
-    payment_date: new Date().toISOString().split('T')[0],
-    payment_method: 'Zelle',
-    status: 'received',
-    notes: ''
+    amount: payment ? String(payment.amount) : rentAmount.toString(),
+    payment_type: payment?.payment_type || 'rent',
+    payment_date: payment?.payment_date || new Date().toISOString().split('T')[0],
+    payment_method: payment?.payment_method || 'Zelle',
+    status: payment?.status || 'received',
+    adjustment_reason: payment?.adjustment_reason || '',
+    notes: payment?.notes || ''
   })
   const [loading, setLoading] = useState(false)
 
@@ -28,30 +31,42 @@ export function PaymentForm({ propertyId, leaseId, tenantId, rentAmount, onSaved
     setLoading(true)
 
     try {
-      // Calculate due date (first of the current month)
-      const now = new Date()
-      const dueDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-
-      const { error } = await supabase.from('payments').insert([{
+      const payload = {
         property_id: propertyId,
         lease_id: leaseId,
         tenant_id: tenantId || null,
         amount: parseFloat(form.amount),
         payment_type: form.payment_type,
         payment_date: form.payment_date,
-        due_date: dueDate,
         payment_method: form.payment_method,
         status: form.status,
+        adjustment_reason: form.adjustment_reason || null,
         notes: form.notes || null
-      }])
+      }
 
-      if (error) throw error
+      if (isEdit) {
+        // Update existing payment
+        const { error } = await supabase.from('payments').update(payload).eq('id', payment.id)
+        if (error) throw error
+      } else {
+        // Calculate due date (first of the current month)
+        const now = new Date()
+        const dueDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+        const { error } = await supabase.from('payments').insert([{ ...payload, due_date: dueDate }])
+        if (error) throw error
+      }
+
+      // Activity log
+      const action = isEdit ? 'Payment updated' : 'Payment received'
+      const details = isEdit
+        ? `$${parseFloat(form.amount).toLocaleString()} (edited) — ${form.payment_method}`
+        : `$${parseFloat(form.amount).toLocaleString()} logged via ${form.payment_method}`
 
       await supabase.from('activity_log').insert({
         property_id: propertyId,
         tenant_id: tenantId || null,
-        action: 'Payment received',
-        details: `$${parseFloat(form.amount).toLocaleString()} logged via ${form.payment_method}`,
+        action,
+        details: form.adjustment_reason ? `${details} — ${form.adjustment_reason}` : details,
         source: 'manual'
       })
 
@@ -116,6 +131,22 @@ export function PaymentForm({ propertyId, leaseId, tenantId, rentAmount, onSaved
         </select>
       </div>
 
+      {(form.status === 'partial' || form.adjustment_reason) && (
+        <div>
+          <label style={labelStyle}>Adjustment Reason</label>
+          <input
+            style={fieldStyle}
+            type="text"
+            value={form.adjustment_reason}
+            onChange={e => set('adjustment_reason', e.target.value)}
+            placeholder="e.g. Credit for repair, Expense deduction, Agreed discount"
+          />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            Why was this amount different from the full rent?
+          </div>
+        </div>
+      )}
+
       <div>
         <label style={labelStyle}>Notes (optional)</label>
         <textarea style={fieldStyle} rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Transaction ID, check number, etc." />
@@ -124,7 +155,7 @@ export function PaymentForm({ propertyId, leaseId, tenantId, rentAmount, onSaved
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
         <button className="btn" onClick={onCancel}>Cancel</button>
         <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
-          {loading ? 'Saving...' : 'Log Payment'}
+          {loading ? 'Saving...' : isEdit ? 'Update Payment' : 'Log Payment'}
         </button>
       </div>
     </div>

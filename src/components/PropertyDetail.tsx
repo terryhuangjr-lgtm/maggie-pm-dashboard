@@ -6,7 +6,7 @@ import { PropertyForm } from './PropertyForm'
 import { TenantForm } from './TenantForm'
 import { LeaseForm } from './LeaseForm'
 import { PaymentForm } from './PaymentForm'
-import { ChevronLeft, MapPin, Building2, Plus, Pencil, CheckCircle, Upload, FileText } from 'lucide-react'
+import { ChevronLeft, MapPin, Building2, Plus, Pencil, X, CheckCircle, Upload, FileText } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 
 interface FullProperty {
@@ -91,6 +91,9 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [renewPreset, setRenewPreset] = useState<any>(null)
   const [showLeaseHistory, setShowLeaseHistory] = useState(false)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [editPayment, setEditPayment] = useState<any>(null)
+  const [payments, setPayments] = useState<any[]>([])
+  const [deleteConfirmPayment, setDeleteConfirmPayment] = useState<string | null>(null)
 
   const [expenses, setExpenses] = useState<any[]>([])
 
@@ -143,6 +146,15 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           .order('date', { ascending: false })
           .limit(20)
         if (expData) setExpenses(expData)
+
+        // Load payment history
+        const { data: payData } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('property_id', propertyId)
+          .order('payment_date', { ascending: false })
+          .limit(50)
+        if (payData) setPayments(payData)
       }
     } catch (err) {
       console.error('Failed to load property:', err)
@@ -663,6 +675,108 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           </div>
         )}
 
+        {/* Payment History */}
+        {payments.length > 0 && (
+          <div className="card">
+            <div className="card-header"><h3>Payment History ({payments.length})</h3></div>
+            <div className="card-body">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    {isAdmin && <th style={{ width: 60 }}></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p: any) => {
+                    const statusColor = p.status === 'received' ? 'var(--green)' : p.status === 'partial' ? 'var(--yellow)' : 'var(--text-muted)'
+                    const isPartialRent = p.status === 'partial' && p.amount < (lease?.monthly_rent ?? Infinity)
+                    return (
+                      <tr key={p.id}>
+                        <td>{p.payment_date ? new Date(p.payment_date + 'T12:00:00').toLocaleDateString() : '—'}</td>
+                        <td style={{ fontWeight: 600 }}>
+                          ${Number(p.amount).toLocaleString()}
+                          {isPartialRent && <span style={{ fontSize: 10, color: 'var(--yellow)', marginLeft: 4 }}>partial</span>}
+                        </td>
+                        <td style={{ fontSize: 12 }}>{p.payment_method || '—'}</td>
+                        <td>
+                          <span style={{
+                            fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                            background: statusColor === 'var(--green)' ? 'rgba(16,185,129,0.15)' : statusColor === 'var(--yellow)' ? 'rgba(245,158,11,0.15)' : 'rgba(100,116,139,0.15)',
+                            color: statusColor
+                          }}>
+                            {p.status === 'received' ? 'Received' : p.status === 'partial' ? 'Partial' : p.status === 'pending' ? 'Pending' : p.status}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p.adjustment_reason ? (
+                            <span title={p.adjustment_reason}>
+                              🔄 {p.adjustment_reason}
+                            </span>
+                          ) : p.notes ? (
+                            <span title={p.notes}>{p.notes}</span>
+                          ) : '—'}
+                        </td>
+                        {isAdmin && (
+                          <td>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button onClick={() => {
+                                setEditPayment(p)
+                                setShowPaymentForm(true)
+                              }} style={{
+                                background: 'none', border: 'none', color: 'var(--accent)',
+                                cursor: 'pointer', fontSize: 11, padding: '2px 4px'
+                              }} title="Edit payment">✏️</button>
+                              <button onClick={() => setDeleteConfirmPayment(p.id)} style={{
+                                background: 'none', border: 'none', color: 'var(--red)',
+                                cursor: 'pointer', fontSize: 11, padding: '2px 4px'
+                              }} title="Delete payment">🗑️</button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Payment Confirmation */}
+        {deleteConfirmPayment && (
+          <div className="modal-overlay" onClick={() => setDeleteConfirmPayment(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+              <div className="modal-header">
+                <h3>Delete Payment?</h3>
+                <button className="filter-btn" onClick={() => setDeleteConfirmPayment(null)}><X size={16} /></button>
+              </div>
+              <div className="modal-body" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                <p>This will permanently remove this payment record. This action cannot be undone.</p>
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn" onClick={() => setDeleteConfirmPayment(null)}>Cancel</button>
+                <button className="btn" style={{
+                  background: 'var(--red)', color: 'white', border: 'none'
+                }} onClick={async () => {
+                  try {
+                    await supabase.from('payments').delete().eq('id', deleteConfirmPayment)
+                    setPayments(p => p.filter(pay => pay.id !== deleteConfirmPayment))
+                  } catch (err) {
+                    console.error('Failed to delete payment:', err)
+                    alert('Failed to delete payment')
+                  }
+                  setDeleteConfirmPayment(null)
+                }}>Delete</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Lease History */}
         {allLeases.length > 1 && (
           <div className="card">
@@ -810,18 +924,21 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         )}
       </Modal>
 
-      <Modal open={showPaymentForm} onClose={() => setShowPaymentForm(false)} title="Log Payment" width="480px">
+      <Modal open={showPaymentForm} onClose={() => { setShowPaymentForm(false); setEditPayment(null) }}
+        title={editPayment ? 'Edit Payment' : 'Log Payment'} width="480px">
         {lease && (
           <PaymentForm
             propertyId={propertyId}
             leaseId={lease.id}
             tenantId={tenant?.id || null}
             rentAmount={lease.monthly_rent}
+            payment={editPayment}
             onSaved={() => {
               setShowPaymentForm(false)
+              setEditPayment(null)
               loadProperty()
             }}
-            onCancel={() => setShowPaymentForm(false)}
+            onCancel={() => { setShowPaymentForm(false); setEditPayment(null) }}
           />
         )}
       </Modal>
