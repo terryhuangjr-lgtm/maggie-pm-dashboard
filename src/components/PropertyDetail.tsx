@@ -94,6 +94,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [editPayment, setEditPayment] = useState<any>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [deleteConfirmPayment, setDeleteConfirmPayment] = useState<string | null>(null)
+  const [showExpenseForm, setShowExpenseForm] = useState(false)
 
   const [expenses, setExpenses] = useState<any[]>([])
 
@@ -642,10 +643,23 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         </div>
 
         {/* Expenses Card */}
-        {expenses.length > 0 && (
-          <div className="card">
-            <div className="card-header"><h3>Expenses</h3></div>
-            <div className="card-body">
+        <div className="card">
+          <div className="card-header">
+            <h3>Expenses {expenses.length > 0 ? `(${expenses.length})` : ''}</h3>
+            {isAdmin && (
+            <button onClick={() => { setShowExpenseForm(true) }} style={{
+              border: '1px solid var(--accent)', borderRadius: 4,
+              color: 'var(--accent)', cursor: 'pointer',
+              fontSize: 11, padding: '4px 8px',
+              background: 'transparent', display: 'flex', alignItems: 'center', gap: 4
+            }}>
+              <Plus size={12} /> Add Expense
+            </button>
+            )}
+          </div>
+          <div className="card-body">
+            {expenses.length > 0 ? (
+              <>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
                 Recent expenses for this property
               </div>
@@ -655,25 +669,32 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                     <th>Date</th>
                     <th>Category</th>
                     <th>Amount</th>
+                    <th>Vendor</th>
                     <th>Description</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {expenses.slice(0, 10).map((e: any) => (
+                  {expenses.slice(0, 20).map((e: any) => (
                     <tr key={e.id}>
                       <td>{e.date ? new Date(e.date).toLocaleDateString() : '—'}</td>
                       <td>{e.category?.replace(/_/g, ' ')}</td>
                       <td style={{ fontWeight: 600, color: 'var(--red)' }}>${Number(e.amount || 0).toLocaleString()}</td>
-                      <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
-                        {e.description || e.vendor || '—'}
+                      <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{e.vendor || '—'}</td>
+                      <td style={{ color: 'var(--text-secondary)', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {e.description || '—'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+              </>
+            ) : (
+              <div className="empty-state" style={{ padding: '12px' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>No expenses logged yet</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Payment History */}
         {payments.length > 0 && (
@@ -941,6 +962,68 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
             onCancel={() => { setShowPaymentForm(false); setEditPayment(null) }}
           />
         )}
+      </Modal>
+
+      {/* Add Expense Modal */}
+      <Modal open={showExpenseForm} onClose={() => setShowExpenseForm(false)} title="Add Expense" width="500px">
+        <form onSubmit={async (e) => {
+          e.preventDefault()
+          const formData = new FormData(e.currentTarget)
+          try {
+            const { error } = await supabase.from('expenses').insert({
+              property_id: propertyId,
+              category: formData.get('category'),
+              amount: parseFloat(formData.get('amount') as string),
+              date: formData.get('date'),
+              vendor: formData.get('vendor') || null,
+              description: formData.get('description') || null,
+              notes: formData.get('notes') || null
+            })
+            if (error) throw error
+            setShowExpenseForm(false)
+            loadProperty()
+          } catch (err: any) {
+            alert('Failed to save expense: ' + err.message)
+          }
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Category *</label>
+              <select name="category" required style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }}>
+                <option value="maintenance">Maintenance & Repairs</option>
+                <option value="taxes">Real Estate Taxes</option>
+                <option value="insurance">Insurance</option>
+                <option value="utilities">Utilities</option>
+                <option value="common_charges">Common Charges</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Amount *</label>
+              <input name="amount" type="number" step="0.01" min="0" required style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} placeholder="0.00" />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Date *</label>
+              <input name="date" type="date" required style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Paid To</label>
+              <input name="vendor" type="text" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} placeholder="Vendor name" />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Description</label>
+              <input name="description" type="text" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} placeholder="What was this for?" />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Notes</label>
+              <textarea name="notes" rows={2} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} placeholder="Receipt number, invoice reference, etc." />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+            <button type="button" className="btn" onClick={() => setShowExpenseForm(false)}>Cancel</button>
+            <button type="submit" className="btn btn-primary">Save Expense</button>
+          </div>
+        </form>
       </Modal>
     </div>
   )
