@@ -18,6 +18,19 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // Debug: check env vars existence (not values)
+  const envCheck = {
+    hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+    hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    hasRefreshToken: !!process.env.GOOGLE_REFRESH_TOKEN,
+    calendarId: process.env.GOOGLE_CALENDAR_ID || 'magchiang@gmail.com'
+  };
+
+  // Return debug info for direct /api/calendar hits
+  if (req.query && req.query._debug === '1') {
+    return res.status(200).json(envCheck);
+  }
+
   // Build auth
   const auth = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -29,7 +42,7 @@ export default async function handler(req, res) {
   });
 
   const calendar = google.calendar({ version: 'v3', auth });
-  const calendarId = process.env.GOOGLE_CALENDAR_ID || 'magchiang@gmail.com';
+  const calendarId = envCheck.calendarId;
 
   try {
     // GET — fetch events
@@ -108,6 +121,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('Calendar API error:', error);
-    return res.status(500).json({ error: error.message || 'Calendar API failed' });
+    return res.status(500).json({ 
+      error: error.message || 'Calendar API failed',
+      code: error.code,
+      status: error.status
+    });
   }
 }
