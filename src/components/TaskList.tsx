@@ -24,6 +24,7 @@ export function TaskList() {
   const [properties, setProperties] = useState<any[]>([])
   const [tenants, setTenants] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [personFilter, setPersonFilter] = useState('maggie')
   const [filter, setFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [updating, setUpdating] = useState<string | null>(null)
@@ -45,11 +46,19 @@ export function TaskList() {
   async function loadTasks() {
     try {
       const [tasksRes, propsRes, tenantsRes] = await Promise.all([
-        supabase.from('open_tasks_by_priority').select('*'),
+        supabase.from('tasks').select('id, title, task_type, priority, due_date, status, assigned_to, property_id, tenant_id, notes').neq('status', 'completed').neq('status', 'archived').order('priority', { ascending: true }),
         supabase.from('properties').select('id, address, unit_number'),
         supabase.from('tenants').select('id, first_name, last_name, property_id'),
       ])
-      setTasks(tasksRes.data || [])
+      // Hydrate address from properties
+      const propsMap = Object.fromEntries((propsRes.data || []).map((p: any) => [p.id, p]))
+      const tenantsMap = Object.fromEntries((tenantsRes.data || []).map((t: any) => [t.id, t]))
+      const hydrated = (tasksRes.data || []).map((t: any) => {
+        const prop = propsMap[t.property_id] || {}
+        const ten = tenantsMap[t.tenant_id] || {}
+        return { ...t, address: prop.address || null, unit_number: prop.unit_number || null, tenant_name: ten.first_name && ten.last_name ? `${ten.first_name} ${ten.last_name}` : null }
+      })
+      setTasks(hydrated)
       setProperties(propsRes.data || [])
       setTenants(tenantsRes.data || [])
     } catch (err) {
@@ -135,6 +144,7 @@ export function TaskList() {
   }
 
   const filtered = tasks.filter(t => {
+    if (personFilter !== 'all' && (t as any).assigned_to !== personFilter) return false
     if (filter === 'overdue' && t.due_date && new Date(t.due_date) >= new Date()) return false
     if (filter === 'today' && t.due_date && new Date(t.due_date).toDateString() !== new Date().toDateString()) return false
     return true
@@ -166,6 +176,13 @@ export function TaskList() {
         }}>
           <Plus size={16} /> New Task
         </button>
+      </div>
+
+      <div className="filter-bar">
+        <button className={`filter-btn ${personFilter === 'maggie' ? 'active' : ''}`} onClick={() => setPersonFilter('maggie')}>Maggie</button>
+        <button className={`filter-btn ${personFilter === 'James' ? 'active' : ''}`} onClick={() => setPersonFilter('James')}>James</button>
+        <button className={`filter-btn ${personFilter === 'Jenna' ? 'active' : ''}`} onClick={() => setPersonFilter('Jenna')}>Jenna</button>
+        <button className={`filter-btn ${personFilter === 'all' ? 'active' : ''}`} onClick={() => setPersonFilter('all')}>All</button>
       </div>
 
       <div className="filter-bar">
@@ -217,8 +234,9 @@ export function TaskList() {
                   <span style={{ fontWeight: 600 }}>{t.title}</span>
                   <StatusBadge status={t.task_type} variant="gray" />
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', gap: 12 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   {t.address && <span>{t.address}</span>}
+                  {(t as any).assigned_to && <span style={{ fontWeight: 500 }}>👤 {(t as any).assigned_to}</span>}
                   {t.tenant_name && <span>Tenant: {t.tenant_name}</span>}
                   {t.due_date && (
                     <span style={{ color: isOverdue ? 'var(--red)' : 'inherit', fontWeight: isOverdue ? 600 : 400 }}>
