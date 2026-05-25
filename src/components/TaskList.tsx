@@ -144,7 +144,10 @@ export function TaskList() {
   }
 
   const filtered = tasks.filter(t => {
-    if (personFilter !== 'all' && (t as any).assigned_to !== personFilter) return false
+    if (personFilter !== 'all') {
+      const assignee = ((t as any).assigned_to || '').toLowerCase()
+      if (!assignee.includes(personFilter.toLowerCase())) return false
+    }
     if (filter === 'overdue' && t.due_date && new Date(t.due_date) >= new Date()) return false
     if (filter === 'today' && t.due_date && new Date(t.due_date).toDateString() !== new Date().toDateString()) return false
     return true
