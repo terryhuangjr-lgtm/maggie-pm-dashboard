@@ -518,9 +518,10 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                   <div className="detail-field-value" style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>
                     ${Number(lease.monthly_rent).toLocaleString()}/mo
                     <button onClick={() => { setEditLease(lease); setShowLeaseForm(true) }} style={{
-
-                      background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer',
-                      marginLeft: 8, fontSize: 11
+                      border: '1px solid var(--border)', borderRadius: 4,
+                      color: 'var(--text-secondary)', cursor: 'pointer',
+                      marginLeft: 8, fontSize: 11, padding: '2px 6px',
+                      background: 'transparent'
                     }}>Edit</button>
                     <button onClick={() => {
                       const end = new Date(lease.lease_end)
