@@ -86,18 +86,39 @@ export function CalendarView() {
             const dateOnly = start.includes('T') ? start.split('T')[0] : start
             const timeStr = start.includes('T') ? start.split('T')[1]?.substring(0, 5) : ''
             const isAllDay = !!e.start?.date && !e.start?.dateTime
+            const isMultiDay = isAllDay && e.end?.date && e.end.date !== e.start?.date
 
-            calEvents.push({
-              id: e.id,
-              date: dateOnly,
-              label: e.summary || 'Untitled',
-              type: 'appointment',
-              property: e.location || '—',
-              details: isAllDay ? 'All day' : (timeStr ? `${timeStr} · Google Calendar` : 'Google Calendar'),
-              _custom: true,
+            // Compute date range: for multi-day all-day events, expand to each day
+            const datesToShow: string[] = [dateOnly]
+            if (isMultiDay) {
+              const s = new Date(e.start.date + 'T12:00:00')
+              const en = new Date(e.end.date + 'T12:00:00')
+              // end.date is exclusive in Google Calendar API
+              const cursor = new Date(s)
+              cursor.setDate(cursor.getDate() + 1)
+              while (cursor < en) {
+                datesToShow.push(cursor.toISOString().split('T')[0])
+                cursor.setDate(cursor.getDate() + 1)
+              }
+            }
+
+            for (const d of datesToShow) {
+              calEvents.push({
+                id: e.id + (datesToShow.length > 1 ? '_' + d : ''),
+                date: d,
+                label: e.summary || 'Untitled',
+                type: 'appointment',
+                property: e.location || '—',
+                details: isMultiDay
+                  ? `All day (${datesToShow.length} days)`
+                  : isAllDay
+                    ? 'All day'
+                    : (timeStr ? `${timeStr} · Google Calendar` : 'Google Calendar'),
+                _custom: true,
               _gcalId: e.id,
               _gcalEvent: e
             })
+          }
           }
         }
       } catch (err) {
