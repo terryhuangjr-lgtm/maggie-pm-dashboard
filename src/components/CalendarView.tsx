@@ -75,26 +75,33 @@ export function CalendarView() {
     try {
       const calEvents: any[] = []
 
-      // Custom events from calendar_events table
-      const { data: customEvents } = await supabase
-        .from('calendar_events')
-        .select('*')
-        .order('event_date', { ascending: true })
-      
-      if (customEvents) {
-        for (const e of customEvents) {
-          if (e.status === 'cancelled') continue
-          calEvents.push({
-            id: e.id,
-            date: e.event_date,
-            label: e.title,
-            type: (e.event_type as any) || 'appointment',
-            property: e.location || '—',
-            details: e.description || (e.event_time ? `${e.event_time.substring(0, 5)} · ${e.duration_minutes}min` : `${e.duration_minutes}min`),
-            _custom: true,
-            _dbEvent: e
-          })
+      // Google Calendar events (SOURCE OF TRUTH for user-created events)
+      try {
+        const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
+        const res = await fetch(`${API}/api/calendar`)
+        if (res.ok) {
+          const gcalEvents = await res.json()
+          for (const e of gcalEvents) {
+            const start = e.start?.dateTime || e.start?.date || ''
+            const dateOnly = start.includes('T') ? start.split('T')[0] : start
+            const timeStr = start.includes('T') ? start.split('T')[1]?.substring(0, 5) : ''
+            const isAllDay = !!e.start?.date && !e.start?.dateTime
+
+            calEvents.push({
+              id: e.id,
+              date: dateOnly,
+              label: e.summary || 'Untitled',
+              type: 'appointment',
+              property: e.location || '—',
+              details: isAllDay ? 'All day' : (timeStr ? `${timeStr} · Google Calendar` : 'Google Calendar'),
+              _custom: true,
+              _gcalId: e.id,
+              _gcalEvent: e
+            })
+          }
         }
+      } catch (err) {
+        console.error('Failed to load Google Calendar events:', err)
       }
 
       // Lease expirations
@@ -185,17 +192,20 @@ export function CalendarView() {
 
   function openEditEvent(ev: any) {
     setEditingEvent(ev)
+    const start = ev.start?.dateTime || ev.start?.date || ''
+    const dateOnly = start.includes('T') ? start.split('T')[0] : start
+    const timeOnly = start.includes('T') ? start.split('T')[1]?.substring(0, 5) : ''
     setFormData({
-      title: ev.title,
+      title: ev.summary || ev.title || '',
       description: ev.description || '',
-      event_type: (ev.event_type as EditableEventType) || 'appointment',
-      event_date: ev.event_date,
-      event_time: ev.event_time || '09:00',
-      duration_minutes: ev.duration_minutes,
-      property_id: ev.property_id || '',
+      event_type: 'appointment',
+      event_date: dateOnly || '',
+      event_time: timeOnly || '09:00',
+      duration_minutes: 60,
+      property_id: '',
       location: ev.location || '',
-      contact_name: ev.contact_name || '',
-      contact_phone: ev.contact_phone || ''
+      contact_name: '',
+      contact_phone: ''
     })
     setShowForm(true)
   }
@@ -204,43 +214,32 @@ export function CalendarView() {
     e.preventDefault()
     if (!formData.title.trim()) return
 
-    const payload: any = {
-      title: formData.title,
-      description: formData.description || null,
-      event_type: formData.event_type,
-      event_date: formData.event_date,
-      event_time: formData.event_time || null,
-      duration_minutes: formData.duration_minutes,
-      location: formData.location || null,
-      contact_name: formData.contact_name || null,
-      contact_phone: formData.contact_phone || null,
-      property_id: formData.property_id || null,
-      created_by: 'dashboard'
-    }
-
-    const headers: Record<string, string> = {
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    }
+    const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
+    const duration_hours = Math.max(1, Math.round((formData.duration_minutes || 60) / 60))
 
     try {
-      if (editingEvent) {
-        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/calendar_events?id=eq.${editingEvent.id}`, {
-          method: 'PATCH',
-          headers,
-          body: JSON.stringify(payload)
-        })
-      } else {
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/calendar_events`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(payload)
-        })
-        if (!res.ok && res.status !== 201) {
-          throw new Error(`HTTP ${res.status}`)
-        }
+      const body = {
+        title: formData.title,
+        date: formData.event_date,
+        time: formData.event_time || undefined,
+        description: [formData.description, formData.location ? `Location: ${formData.location}` : '', formData.contact_name ? `Contact: ${formData.contact_name} ${formData.contact_phone || ''}` : ''].filter(Boolean).join('\n'),
+        duration_hours
+      }
+
+      if (editingEvent?._gcalId) {
+        // Update via Google Calendar API — use delete + create for simplicity
+        await fetch(`${API}/api/calendar?id=${editingEvent._gcalId}`, { method: 'DELETE' })
+      }
+
+      const res = await fetch(`${API}/api/calendar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || `HTTP ${res.status}`)
       }
 
       setShowForm(false)
@@ -252,27 +251,19 @@ export function CalendarView() {
     }
   }
 
-  async function handleDelete(eventId: string) {
-    if (!confirm('Cancel this event?')) return
+  async function handleDelete(gcalId: string) {
+    if (!confirm('Delete this event from Google Calendar?')) return
 
-    const headers: Record<string, string> = {
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    }
+    const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
 
     try {
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/calendar_events?id=eq.${eventId}`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ status: 'cancelled' })
-      })
+      const res = await fetch(`${API}/api/calendar?id=${gcalId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setShowForm(false)
       resetForm()
       await loadEvents()
     } catch (err) {
-      console.error('Failed to cancel event:', err)
+      console.error('Failed to delete event:', err)
     }
   }
 
@@ -453,7 +444,7 @@ export function CalendarView() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {selectedDayEvents.map((ev: any, i: number) => {
                   const colors = EVENT_COLORS[ev.type as keyof typeof EVENT_COLORS] || EVENT_COLORS.appointment
-                  const isEditable = ev._custom && ev._dbEvent
+                  const isEditable = ev._custom && ev._gcalId
                   return (
                     <div
                       key={`${ev.date}-${i}`}
@@ -467,7 +458,7 @@ export function CalendarView() {
                     >
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                         <div style={{ flex: 1, cursor: isEditable ? 'pointer' : 'default' }}
-                          onClick={() => isEditable && openEditEvent(ev._dbEvent)}
+                          onClick={() => isEditable && openEditEvent(ev._gcalEvent)}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <span style={{ color: colors.color }}>{eventIcons[ev.type] || <Clock size={14} />}</span>
@@ -484,7 +475,7 @@ export function CalendarView() {
                         </div>
                         {isEditable && (
                           <button
-                            onClick={() => handleDelete(ev._dbEvent.id)}
+                            onClick={() => handleDelete(ev._gcalId)}
                             style={{
                               background: 'none', border: 'none', color: 'var(--text-muted)',
                               cursor: 'pointer', padding: 2, flexShrink: 0
