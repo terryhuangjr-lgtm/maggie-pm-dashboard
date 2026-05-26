@@ -135,9 +135,14 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Event ID is required' });
       }
 
-      await gcalFetch(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`, {
-        method: 'DELETE'
-      });
+      try {
+        await gcalFetch(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`, {
+          method: 'DELETE'
+        });
+      } catch (e) {
+        // 204 No Content is expected for DELETE — don't parse body
+        if (!e.message.includes('204')) throw e;
+      }
       return res.status(200).json({ success: true });
     }
 
