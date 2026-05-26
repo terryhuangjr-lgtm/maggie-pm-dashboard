@@ -41,6 +41,7 @@ async function gcalFetch(path, options = {}) {
       ...options.headers
     }
   });
+  if (res.status === 204) return {}; // No Content (DELETE)
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
@@ -135,14 +136,9 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Event ID is required' });
       }
 
-      try {
-        await gcalFetch(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`, {
-          method: 'DELETE'
-        });
-      } catch (e) {
-        // 204 No Content is expected for DELETE — don't parse body
-        if (!e.message.includes('204')) throw e;
-      }
+      await gcalFetch(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
       return res.status(200).json({ success: true });
     }
 
