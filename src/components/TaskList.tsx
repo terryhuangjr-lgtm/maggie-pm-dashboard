@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { StatusBadge } from './ui/StatusBadge'
 import { Modal } from './ui/Modal'
 import { TaskForm } from './TaskForm'
-import { Plus, Clock, CheckCircle } from 'lucide-react'
+import { Plus, Clock, CheckCircle, ChevronDown, CheckSquare, Square, Users, ArrowUpDown } from 'lucide-react'
 
 interface Task {
   id: string
@@ -19,6 +19,18 @@ interface Task {
   completed_at?: string | null
 }
 
+type SortMode = 'due_date_asc' | 'priority_desc' | 'created_desc'
+
+const QUICK_FILTERS = [
+  { label: '🔍 All My Tasks', person: 'all', type: 'all' },
+  { label: '🔧 Maggie: Repairs', person: 'maggie', type: 'repairs' },
+  { label: '🔍 Maggie: Inspections', person: 'maggie', type: 'inspection' },
+  { label: '💰 Maggie: Rent Followup', person: 'maggie', type: 'rent_followup' },
+  { label: '📄 James: Lease Renewals', person: 'James', type: 'lease_renewal' },
+  { label: '🔧 James: Repairs', person: 'James', type: 'repairs' },
+  { label: '📋 Jenna: All', person: 'Jenna', type: 'all' },
+]
+
 export function TaskList() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [properties, setProperties] = useState<any[]>([])
@@ -27,6 +39,7 @@ export function TaskList() {
   const [personFilter, setPersonFilter] = useState('maggie')
   const [filter, setFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [sortMode, setSortMode] = useState<SortMode>('due_date_asc')
   const [updating, setUpdating] = useState<string | null>(null)
   const [showCompleted, setShowCompleted] = useState(false)
   const [completedTasks, setCompletedTasks] = useState<Task[]>([])
@@ -37,6 +50,11 @@ export function TaskList() {
 
   const PAGE_SIZE = 10
   const [page, setPage] = useState(1)
+
+  // Bulk select
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkUpdating, setBulkUpdating] = useState(false)
+  const selectAllOnPageRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadTasks()
@@ -49,11 +67,10 @@ export function TaskList() {
   async function loadTasks() {
     try {
       const [tasksRes, propsRes, tenantsRes] = await Promise.all([
-        supabase.from('tasks').select('id, title, task_type, priority, due_date, status, assigned_to, property_id, tenant_id, notes').neq('status', 'completed').neq('status', 'archived').order('due_date', { ascending: true, nullsFirst: false }),
+        supabase.from('tasks').select('id, title, task_type, priority, due_date, status, assigned_to, property_id, tenant_id, notes, created_at').neq('status', 'completed').neq('status', 'archived').order('due_date', { ascending: true, nullsFirst: false }),
         supabase.from('properties').select('id, address, unit_number'),
         supabase.from('tenants').select('id, first_name, last_name, property_id'),
       ])
-      // Hydrate address from properties
       const propsMap = Object.fromEntries((propsRes.data || []).map((p: any) => [p.id, p]))
       const tenantsMap = Object.fromEntries((tenantsRes.data || []).map((t: any) => [t.id, t]))
       const hydrated = (tasksRes.data || []).map((t: any) => {
@@ -127,6 +144,50 @@ export function TaskList() {
     }
   }
 
+  async function bulkComplete() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Complete ${selectedIds.size} selected task(s)?`)) return
+    setBulkUpdating(true)
+    const ids = Array.from(selectedIds)
+    try {
+      for (const id of ids) {
+        await supabase.from('tasks').update({
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        }).eq('id', id)
+      }
+      await supabase.from('activity_log').insert({
+        action: 'Tasks bulk completed',
+        details: `Completed ${ids.length} tasks via bulk action`,
+        source: 'manual'
+      })
+      setSelectedIds(new Set())
+      setTimeout(loadTasks, 300)
+    } catch (err) {
+      console.error('Failed to bulk complete:', err)
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
+
+  async function bulkAssign(assignee: string) {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Assign ${selectedIds.size} task(s) to ${assignee}?`)) return
+    setBulkUpdating(true)
+    const ids = Array.from(selectedIds)
+    try {
+      for (const id of ids) {
+        await supabase.from('tasks').update({ assigned_to: assignee }).eq('id', id)
+      }
+      setSelectedIds(new Set())
+      setTimeout(loadTasks, 300)
+    } catch (err) {
+      console.error('Failed to bulk assign:', err)
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
+
   async function undoComplete(taskId: string, title: string) {
     try {
       await supabase.from('tasks').update({
@@ -138,7 +199,6 @@ export function TaskList() {
         details: `Restored from completed: ${title}`,
         source: 'manual'
       })
-      // Refresh both lists
       loadTasks()
       loadCompletedTasks()
     } catch (err) {
@@ -146,7 +206,33 @@ export function TaskList() {
     }
   }
 
-  const filtered = tasks.filter(t => {
+  function applyQuickFilter(qf: typeof QUICK_FILTERS[number]) {
+    setPersonFilter(qf.person)
+    setTypeFilter(qf.type)
+    setFilter('all')
+    setSelectedIds(new Set())
+  }
+
+  // Sorting
+  function sortTasks(list: Task[]) {
+    const sorted = [...list]
+    if (sortMode === 'due_date_asc') {
+      sorted.sort((a, b) => {
+        if (!a.due_date && !b.due_date) return 0
+        if (!a.due_date) return 1
+        if (!b.due_date) return -1
+        return a.due_date.localeCompare(b.due_date)
+      })
+    } else if (sortMode === 'priority_desc') {
+      const rank = { urgent: 0, high: 1, medium: 2, low: 3 }
+      sorted.sort((a, b) => (rank[a.priority as keyof typeof rank] ?? 99) - (rank[b.priority as keyof typeof rank] ?? 99))
+    } else if (sortMode === 'created_desc') {
+      sorted.sort((a, b) => ((b as any).created_at || '').localeCompare((a as any).created_at || ''))
+    }
+    return sorted
+  }
+
+  const filtered = sortTasks(tasks.filter(t => {
     if (personFilter !== 'all') {
       const assignee = ((t as any).assigned_to || '').toLowerCase()
       if (!assignee.includes(personFilter.toLowerCase())) return false
@@ -157,14 +243,31 @@ export function TaskList() {
   }).filter(t => {
     if (typeFilter === 'all') return true
     return t.task_type === typeFilter
-  })
+  }))
+
   // Reset to page 1 when filters change
   const prevFilterKey = useRef('')
-  const filterKey = `${personFilter}|${filter}|${typeFilter}`
+  const filterKey = `${personFilter}|${filter}|${typeFilter}|${sortMode}`
   if (filterKey !== prevFilterKey.current) {
     prevFilterKey.current = filterKey
-    // Delayed to avoid setState-while-rendering warning
     setTimeout(() => setPage(1), 0)
+  }
+
+  const visibleTasks = filtered.slice(0, page * PAGE_SIZE)
+
+  // Bulk select helpers
+  const allVisibleSelected = visibleTasks.length > 0 && visibleTasks.every(t => selectedIds.has(t.id))
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(visibleTasks.map(t => t.id)))
+    }
+  }
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    setSelectedIds(next)
   }
 
   const CATEGORIES = [
@@ -182,7 +285,7 @@ export function TaskList() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1>Tasks</h1>
-          <p>{tasks.length} open • {tasks.filter(t => t.priority === 'urgent').length} urgent</p>
+          <p>{tasks.length} open • {tasks.filter(t => t.priority === 'urgent').length} urgent • {tasks.filter(t => t.due_date && new Date(t.due_date) < new Date()).length} overdue</p>
         </div>
         <button onClick={() => { setEditTask(null); setShowForm(true) }} style={{
           padding: '8px 16px', borderRadius: 8, border: 'none',
@@ -193,38 +296,135 @@ export function TaskList() {
         </button>
       </div>
 
-      <div className="filter-bar">
-        <button className={`filter-btn ${personFilter === 'maggie' ? 'active' : ''}`} onClick={() => setPersonFilter('maggie')}>Maggie</button>
-        <button className={`filter-btn ${personFilter === 'James' ? 'active' : ''}`} onClick={() => setPersonFilter('James')}>James</button>
-        <button className={`filter-btn ${personFilter === 'Jenna' ? 'active' : ''}`} onClick={() => setPersonFilter('Jenna')}>Jenna</button>
-        <button className={`filter-btn ${personFilter === 'all' ? 'active' : ''}`} onClick={() => setPersonFilter('all')}>All</button>
-      </div>
-
-      <div className="filter-bar">
-        <button className={`filter-btn ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</button>
-        <button className={`filter-btn ${filter === 'overdue' ? 'active' : ''}`} onClick={() => setFilter('overdue')}>Overdue</button>
-        <button className={`filter-btn ${filter === 'today' ? 'active' : ''}`} onClick={() => setFilter('today')}>Due Today</button>
-      </div>
-
-      <div className="filter-bar">
-        <button className={`filter-btn ${typeFilter === 'all' ? 'active' : ''}`} onClick={() => setTypeFilter('all')}>All Types</button>
-        {CATEGORIES.map(type => (
-          <button key={type}
-            className={`filter-btn ${typeFilter === type ? 'active' : ''}`}
-            onClick={() => setTypeFilter(type)}>
-            {type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+      {/* Quick-filter pills */}
+      <div className="filter-bar" style={{ flexWrap: 'wrap' }}>
+        {QUICK_FILTERS.map(qf => (
+          <button
+            key={qf.label}
+            className={`filter-btn ${personFilter === qf.person && typeFilter === qf.type && filter === 'all' ? 'active' : ''}`}
+            onClick={() => applyQuickFilter(qf)}
+            style={{ fontSize: 12 }}
+          >
+            {qf.label}
           </button>
         ))}
       </div>
+
+      {/* Person + status filters */}
+      <div className="filter-bar">
+        <button className={`filter-btn ${personFilter === 'maggie' ? 'active' : ''}`} onClick={() => { setPersonFilter('maggie'); setSelectedIds(new Set()) }}>Maggie</button>
+        <button className={`filter-btn ${personFilter === 'James' ? 'active' : ''}`} onClick={() => { setPersonFilter('James'); setSelectedIds(new Set()) }}>James</button>
+        <button className={`filter-btn ${personFilter === 'Jenna' ? 'active' : ''}`} onClick={() => { setPersonFilter('Jenna'); setSelectedIds(new Set()) }}>Jenna</button>
+        <button className={`filter-btn ${personFilter === 'all' ? 'active' : ''}`} onClick={() => { setPersonFilter('all'); setSelectedIds(new Set()) }}>All</button>
+      </div>
+
+      <div className="filter-bar">
+        <button className={`filter-btn ${filter === 'all' ? 'active' : ''}`} onClick={() => { setFilter('all'); setSelectedIds(new Set()) }}>All</button>
+        <button className={`filter-btn ${filter === 'overdue' ? 'active' : ''}`} onClick={() => { setFilter('overdue'); setSelectedIds(new Set()) }}>Overdue</button>
+        <button className={`filter-btn ${filter === 'today' ? 'active' : ''}`} onClick={() => { setFilter('today'); setSelectedIds(new Set()) }}>Due Today</button>
+      </div>
+
+      {/* Type filter + sort toggle */}
+      <div className="filter-bar">
+        <button className={`filter-btn ${typeFilter === 'all' ? 'active' : ''}`} onClick={() => { setTypeFilter('all'); setSelectedIds(new Set()) }}>All Types</button>
+        {CATEGORIES.map(type => (
+          <button key={type}
+            className={`filter-btn ${typeFilter === type ? 'active' : ''}`}
+            onClick={() => { setTypeFilter(type); setSelectedIds(new Set()) }}>
+            {type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+          </button>
+        ))}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
+          <ArrowUpDown size={14} style={{ color: 'var(--text-muted)' }} />
+          <select
+            value={sortMode}
+            onChange={e => setSortMode(e.target.value as SortMode)}
+            style={{
+              padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)',
+              background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer'
+            }}
+          >
+            <option value="due_date_asc">Due Date ↑</option>
+            <option value="priority_desc">Priority</option>
+            <option value="created_desc">Newest</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px',
+          background: 'var(--accent-light)', borderRadius: 8, marginBottom: 12,
+          border: '1px solid var(--accent)', fontSize: 13
+        }}>
+          <CheckSquare size={16} style={{ color: 'var(--accent)' }} />
+          <span style={{ fontWeight: 600 }}>{selectedIds.size} selected</span>
+          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+            <button
+              onClick={bulkComplete}
+              disabled={bulkUpdating}
+              className="filter-btn"
+              style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--green)', fontWeight: 600, fontSize: 12 }}
+            >
+              <CheckCircle size={14} /> Complete
+            </button>
+            <span style={{ color: 'var(--border)', alignSelf: 'center' }}>|</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>Assign to:</span>
+            {['Maggie', 'James', 'Jenna'].map(name => (
+              <button
+                key={name}
+                onClick={() => bulkAssign(name)}
+                disabled={bulkUpdating}
+                className="filter-btn"
+                style={{ fontSize: 12 }}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtered.length === 0 && (
           <div className="empty-state"><CheckCircle /> <p>No tasks match current filters</p></div>
         )}
-        {filtered.slice(0, page * PAGE_SIZE).map(t => {
+        {/* Select all header */}
+        {visibleTasks.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, color: 'var(--text-muted)' }}>
+              <input
+                ref={selectAllOnPageRef}
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={toggleSelectAll}
+                style={{ cursor: 'pointer' }}
+              />
+              Select all {visibleTasks.length} on page
+            </label>
+          </div>
+        )}
+        {visibleTasks.map(t => {
           const isOverdue = t.due_date && new Date(t.due_date) < new Date()
+          const isSelected = selectedIds.has(t.id)
           return (
-            <div key={t.id} className="property-card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div
+              key={t.id}
+              className="property-card"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                border: isSelected ? '1.5px solid var(--accent)' : undefined,
+                background: isSelected ? 'var(--accent-light)' : undefined,
+                transition: 'all 0.1s ease'
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => toggleSelect(t.id)}
+                style={{ cursor: 'pointer', flexShrink: 0 }}
+              />
               <button
                 onClick={() => markComplete(t.id)}
                 disabled={updating === t.id}
