@@ -21,9 +21,6 @@ interface Task {
 
 type SortMode = 'due_date_asc' | 'priority_desc' | 'created_desc'
 
-  // Quick-filter pills
-  const QUICK_FILTERS: { label: string; person: string; type: string }[] = []
-
 export function TaskList() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [properties, setProperties] = useState<any[]>([])
