@@ -5,8 +5,48 @@
  * GET /api/calendar?date=2026-05-25  (specific day)
  * POST /api/calendar (create event)
  * DELETE /api/calendar?id=<eventId> (delete event)
+ * 
+ * Uses raw HTTPS + google-auth-library (NOT googleapis, which has v172 bug with insert)
  */
 import { google } from 'googleapis';
+
+const SCOPES = ['https://www.googleapis.com/auth/calendar'];
+const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const API_BASE = 'https://www.googleapis.com/calendar/v3';
+
+async function getAccessToken() {
+  const resp = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      grant_type: 'refresh_token'
+    })
+  });
+  const data = await resp.json();
+  if (!data.access_token) throw new Error(data.error_description || 'Failed to get access token');
+  return data.access_token;
+}
+
+async function gcalFetch(path, options = {}) {
+  const token = await getAccessToken();
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...options.headers
+    }
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
+  }
+  return data;
+}
 
 export default async function handler(req, res) {
   // CORS
@@ -18,31 +58,25 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Build auth
+  // Build auth for googleapis (used only for GET, which works fine)
   const auth = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET
   );
-
-  auth.setCredentials({
-    refresh_token: process.env.GOOGLE_REFRESH_TOKEN
-  });
-
+  auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
   const calendar = google.calendar({ version: 'v3', auth });
   const calendarId = process.env.GOOGLE_CALENDAR_ID || 'magchiang@gmail.com';
 
   try {
-    // GET — fetch events
+    // GET — fetch events (uses googleapis — confirmed working)
     if (req.method === 'GET') {
       const { date } = req.query;
 
       let timeMin, timeMax;
       if (date) {
-        // Specific day
         timeMin = new Date(`${date}T00:00:00-04:00`).toISOString();
         timeMax = new Date(`${date}T23:59:59-04:00`).toISOString();
       } else {
-        // Next 60 days
         timeMin = new Date().toISOString();
         timeMax = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
       }
@@ -59,7 +93,7 @@ export default async function handler(req, res) {
       return res.status(200).json(response.data.items || []);
     }
 
-    // POST — create event
+    // POST — create event (uses raw REST — googleapis v172 has insert bug)
     if (req.method === 'POST') {
       const { title, date, time, description, duration_hours } = req.body;
       if (!title || !date) {
@@ -70,7 +104,6 @@ export default async function handler(req, res) {
       if (time) {
         const startDt = new Date(`${date}T${time}:00-04:00`);
         const endDt = new Date(startDt.getTime() + (duration_hours || 1) * 60 * 60 * 1000);
-
         eventBody = {
           summary: title,
           description: description || '',
@@ -78,6 +111,7 @@ export default async function handler(req, res) {
           end: { dateTime: endDt.toISOString(), timeZone: 'America/New_York' }
         };
       } else {
+        // All-day event
         eventBody = {
           summary: title,
           description: description || '',
@@ -86,22 +120,24 @@ export default async function handler(req, res) {
         };
       }
 
-      const created = await calendar.events.insert({
-        calendarId,
-        body: eventBody
+      const created = await gcalFetch(`/calendars/${encodeURIComponent(calendarId)}/events`, {
+        method: 'POST',
+        body: JSON.stringify(eventBody)
       });
 
-      return res.status(201).json(created.data);
+      return res.status(201).json(created);
     }
 
-    // DELETE — delete event
+    // DELETE — delete event (uses raw REST for consistency)
     if (req.method === 'DELETE') {
       const { id } = req.query;
       if (!id) {
         return res.status(400).json({ error: 'Event ID is required' });
       }
 
-      await calendar.events.delete({ calendarId, eventId: id });
+      await gcalFetch(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
       return res.status(200).json({ success: true });
     }
 
