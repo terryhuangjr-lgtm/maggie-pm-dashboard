@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { StatusBadge } from './ui/StatusBadge'
 import { Modal } from './ui/Modal'
@@ -35,6 +35,9 @@ export function TaskList() {
   const [showForm, setShowForm] = useState(false)
   const [editTask, setEditTask] = useState<any>(null)
 
+  const PAGE_SIZE = 10
+  const [page, setPage] = useState(1)
+
   useEffect(() => {
     loadTasks()
     const channel = supabase.channel('tasks-realtime')
@@ -46,7 +49,7 @@ export function TaskList() {
   async function loadTasks() {
     try {
       const [tasksRes, propsRes, tenantsRes] = await Promise.all([
-        supabase.from('tasks').select('id, title, task_type, priority, due_date, status, assigned_to, property_id, tenant_id, notes').neq('status', 'completed').neq('status', 'archived').order('priority', { ascending: true }),
+        supabase.from('tasks').select('id, title, task_type, priority, due_date, status, assigned_to, property_id, tenant_id, notes').neq('status', 'completed').neq('status', 'archived').order('due_date', { ascending: true, nullsFirst: false }),
         supabase.from('properties').select('id, address, unit_number'),
         supabase.from('tenants').select('id, first_name, last_name, property_id'),
       ])
@@ -155,6 +158,14 @@ export function TaskList() {
     if (typeFilter === 'all') return true
     return t.task_type === typeFilter
   })
+  // Reset to page 1 when filters change
+  const prevFilterKey = useRef('')
+  const filterKey = `${personFilter}|${filter}|${typeFilter}`
+  if (filterKey !== prevFilterKey.current) {
+    prevFilterKey.current = filterKey
+    // Delayed to avoid setState-while-rendering warning
+    setTimeout(() => setPage(1), 0)
+  }
 
   const CATEGORIES = [
     'repairs', 'inspection', 'lease_renewal',
@@ -210,7 +221,7 @@ export function TaskList() {
         {filtered.length === 0 && (
           <div className="empty-state"><CheckCircle /> <p>No tasks match current filters</p></div>
         )}
-        {filtered.map(t => {
+        {filtered.slice(0, page * PAGE_SIZE).map(t => {
           const isOverdue = t.due_date && new Date(t.due_date) < new Date()
           return (
             <div key={t.id} className="property-card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -257,6 +268,24 @@ export function TaskList() {
           )
         })}
       </div>
+
+      {/* Pagination - Show More */}
+      {filtered.length > page * PAGE_SIZE && (
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <button
+            onClick={() => setPage(p => p + 1)}
+            className="filter-btn"
+            style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            Show {Math.min(PAGE_SIZE, filtered.length - page * PAGE_SIZE)} more · {filtered.length - page * PAGE_SIZE} remaining
+          </button>
+        </div>
+      )}
+      {filtered.length > 0 && (
+        <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+          Showing {Math.min(filtered.length, page * PAGE_SIZE)} of {filtered.length} tasks
+        </div>
+      )}
 
       {/* Completed tasks toggle */}
       <div style={{ marginTop: 16 }}>
