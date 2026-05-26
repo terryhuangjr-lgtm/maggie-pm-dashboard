@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { StatusBadge } from './ui/StatusBadge'
 import { Modal } from './ui/Modal'
 import { TaskForm } from './TaskForm'
-import { Plus, Clock, CheckCircle, ChevronDown, CheckSquare, Square, Users, ArrowUpDown } from 'lucide-react'
+import { Plus, Clock, CheckCircle, CheckSquare, ArrowUpDown } from 'lucide-react'
 
 interface Task {
   id: string
