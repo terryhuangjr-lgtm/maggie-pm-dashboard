@@ -21,15 +21,8 @@ interface Task {
 
 type SortMode = 'due_date_asc' | 'priority_desc' | 'created_desc'
 
-const QUICK_FILTERS = [
-  { label: '🔍 All My Tasks', person: 'all', type: 'all' },
-  { label: '🔧 Maggie: Repairs', person: 'maggie', type: 'repairs' },
-  { label: '🔍 Maggie: Inspections', person: 'maggie', type: 'inspection' },
-  { label: '💰 Maggie: Rent Followup', person: 'maggie', type: 'rent_followup' },
-  { label: '📄 James: Lease Renewals', person: 'James', type: 'lease_renewal' },
-  { label: '🔧 James: Repairs', person: 'James', type: 'repairs' },
-  { label: '📋 Jenna: All', person: 'Jenna', type: 'all' },
-]
+  // Quick-filter pills
+  const QUICK_FILTERS: { label: string; person: string; type: string }[] = []
 
 export function TaskList() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -206,13 +199,6 @@ export function TaskList() {
     }
   }
 
-  function applyQuickFilter(qf: typeof QUICK_FILTERS[number]) {
-    setPersonFilter(qf.person)
-    setTypeFilter(qf.type)
-    setFilter('all')
-    setSelectedIds(new Set())
-  }
-
   // Sorting
   function sortTasks(list: Task[]) {
     const sorted = [...list]
@@ -294,20 +280,6 @@ export function TaskList() {
         }}>
           <Plus size={16} /> New Task
         </button>
-      </div>
-
-      {/* Quick-filter pills */}
-      <div className="filter-bar" style={{ flexWrap: 'wrap' }}>
-        {QUICK_FILTERS.map(qf => (
-          <button
-            key={qf.label}
-            className={`filter-btn ${personFilter === qf.person && typeFilter === qf.type && filter === 'all' ? 'active' : ''}`}
-            onClick={() => applyQuickFilter(qf)}
-            style={{ fontSize: 12 }}
-          >
-            {qf.label}
-          </button>
-        ))}
       </div>
 
       {/* Person + status filters */}
