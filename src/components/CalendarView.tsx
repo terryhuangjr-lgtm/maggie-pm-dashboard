@@ -102,6 +102,20 @@ export function CalendarView() {
               }
             }
 
+            // Compute duration from start/end for timed events
+            let durationStr = ''
+            if (e.start?.dateTime && e.end?.dateTime) {
+              const durMs = new Date(e.end.dateTime).getTime() - new Date(e.start.dateTime).getTime()
+              const durMin = Math.round(durMs / 60000)
+              if (durMin >= 60) {
+                const h = Math.floor(durMin / 60)
+                const m = durMin % 60
+                durationStr = m ? `${h}h ${m}m` : `${h}h`
+              } else {
+                durationStr = `${durMin}min`
+              }
+            }
+
             for (const d of datesToShow) {
               calEvents.push({
                 id: e.id + (datesToShow.length > 1 ? '_' + d : ''),
@@ -113,7 +127,7 @@ export function CalendarView() {
                   ? `All day (${datesToShow.length} days)`
                   : isAllDay
                     ? 'All day'
-                    : (timeStr ? `${timeStr} · Google Calendar` : 'Google Calendar'),
+                    : (timeStr ? `${timeStr} · ${durationStr}` : durationStr || 'Google Calendar'),
                 _custom: true,
               _gcalId: e.id,
               _gcalEvent: e
@@ -123,6 +137,31 @@ export function CalendarView() {
         }
       } catch (err) {
         console.error('Failed to load Google Calendar events:', err)
+      }
+
+      // Custom events from calendar_events table (created via dashboard form)
+      try {
+        const { data: customEvents } = await supabase
+          .from('calendar_events')
+          .select('*')
+          .order('event_date', { ascending: true })
+
+        if (customEvents) {
+          for (const e of customEvents) {
+            if (e.status === 'cancelled') continue
+            const timeStr = e.event_time ? `${e.event_time.substring(0, 5)}` : ''
+            const durationStr = e.duration_minutes ? ` · ${e.duration_minutes}min` : ''
+            calEvents.push({
+              date: e.event_date,
+              label: e.title,
+              type: e.event_type || 'appointment',
+              property: e.location || '—',
+              details: e.description || (timeStr ? `${timeStr}${durationStr}` : durationStr.trim() || '')
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load custom events:', err)
       }
 
       // Lease expirations
@@ -236,7 +275,7 @@ export function CalendarView() {
     if (!formData.title.trim()) return
 
     const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
-    const duration_hours = Math.max(1, Math.round((formData.duration_minutes || 60) / 60))
+    const duration_minutes = formData.duration_minutes || 60
 
     try {
       const body = {
@@ -244,7 +283,7 @@ export function CalendarView() {
         date: formData.event_date,
         time: formData.event_time || undefined,
         description: [formData.description, formData.location ? `Location: ${formData.location}` : '', formData.contact_name ? `Contact: ${formData.contact_name} ${formData.contact_phone || ''}` : ''].filter(Boolean).join('\n'),
-        duration_hours
+        duration_minutes
       }
 
       if (editingEvent?._gcalId) {

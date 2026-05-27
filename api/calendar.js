@@ -6,11 +6,8 @@
  * POST /api/calendar (create event)
  * DELETE /api/calendar?id=<eventId> (delete event)
  * 
- * Uses raw HTTPS + google-auth-library (NOT googleapis, which has v172 bug with insert)
+ * Uses raw HTTPS fetch (no googleapis dependency — avoids v172 insert bug)
  */
-import { google } from 'googleapis';
-
-const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API_BASE = 'https://www.googleapis.com/calendar/v3';
 
@@ -59,17 +56,10 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Build auth for googleapis (used only for GET, which works fine)
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
-  );
-  auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
-  const calendar = google.calendar({ version: 'v3', auth });
   const calendarId = process.env.GOOGLE_CALENDAR_ID || 'magchiang@gmail.com';
 
   try {
-    // GET — fetch events (uses googleapis — confirmed working)
+    // GET — fetch events (uses raw REST, no googleapis dependency needed)
     if (req.method === 'GET') {
       const { date } = req.query;
 
@@ -82,21 +72,22 @@ export default async function handler(req, res) {
         timeMax = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
       }
 
-      const response = await calendar.events.list({
-        calendarId,
+      const params = new URLSearchParams({
         timeMin,
         timeMax,
-        singleEvents: true,
+        singleEvents: 'true',
         orderBy: 'startTime',
-        maxResults: 250
+        maxResults: '250'
       });
 
-      return res.status(200).json(response.data.items || []);
+      // Use gcalFetch which gets its own fresh token
+      const data = await gcalFetch(`/calendars/${encodeURIComponent(calendarId)}/events?${params}`);
+      return res.status(200).json(data.items || []);
     }
 
     // POST — create event (uses raw REST — googleapis v172 has insert bug)
     if (req.method === 'POST') {
-      const { title, date, time, description, duration_hours } = req.body;
+      const { title, date, time, description, duration_minutes } = req.body;
       if (!title || !date) {
         return res.status(400).json({ error: 'title and date are required' });
       }
@@ -104,7 +95,8 @@ export default async function handler(req, res) {
       let eventBody;
       if (time) {
         const startDt = new Date(`${date}T${time}:00-04:00`);
-        const endDt = new Date(startDt.getTime() + (duration_hours || 1) * 60 * 60 * 1000);
+        const durationMs = (duration_minutes || 60) * 60 * 1000;
+        const endDt = new Date(startDt.getTime() + durationMs);
         eventBody = {
           summary: title,
           description: description || '',
