@@ -24,10 +24,6 @@ export function LeaseForm({ propertyId, tenants, lease, onSaved, onCancel }: Lea
     auto_renew: lease?.auto_renew || false,
     status: lease?.status || 'active',
     notes: lease?.notes || '',
-    deposit_returned_date: lease?.deposit_returned_date || '',
-    deposit_returned_amount: lease?.deposit_returned_amount || '',
-    deposit_deductions: lease?.deposit_deductions || '',
-    deposit_deduction_notes: lease?.deposit_deduction_notes || '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -86,9 +82,6 @@ export function LeaseForm({ propertyId, tenants, lease, onSaved, onCancel }: Lea
     }
   }
 
-  // Determine if deposit return fields should show
-  const showDepositReturn = form.status === 'expired' || form.status === 'terminated'
-
   return (
     <form onSubmit={handleSubmit}>
       {error && <div style={{ color: 'var(--red)', marginBottom: 12, fontSize: 13 }}>{error}</div>}
@@ -139,35 +132,6 @@ export function LeaseForm({ propertyId, tenants, lease, onSaved, onCancel }: Lea
         <input type="checkbox" id="auto_renew" checked={form.auto_renew} onChange={e => set('auto_renew', e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
         <label htmlFor="auto_renew" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Auto-renewal</label>
       </div>
-
-      {showDepositReturn && (
-        <>
-          <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '16px 0' }} />
-          <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text-secondary)' }}>Security Deposit Return</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Deposit Returned Date</label>
-              <input style={fieldStyle} type="date" value={form.deposit_returned_date}
-                onChange={e => set('deposit_returned_date', e.target.value)} />
-            </div>
-            <div>
-              <label style={labelStyle}>Amount Returned ($)</label>
-              <input style={fieldStyle} type="number" value={form.deposit_returned_amount}
-                onChange={e => set('deposit_returned_amount', e.target.value)} />
-            </div>
-            <div>
-              <label style={labelStyle}>Deductions ($)</label>
-              <input style={fieldStyle} type="number" value={form.deposit_deductions}
-                onChange={e => set('deposit_deductions', e.target.value)} />
-            </div>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <label style={labelStyle}>Deduction Notes</label>
-            <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={form.deposit_deduction_notes}
-              onChange={e => set('deposit_deduction_notes', e.target.value)} placeholder="Describe any deductions..." />
-          </div>
-        </>
-      )}
 
       <div style={{ marginTop: 12 }}>
         <label style={labelStyle}>Notes</label>

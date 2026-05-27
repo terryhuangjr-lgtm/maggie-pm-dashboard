@@ -7,11 +7,4 @@ if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase environment variables')
 }
 
-// Anon key client — RLS protects all writes
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    storage: window.sessionStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-  },
-})
+export const supabase = createClient(supabaseUrl, supabaseKey)

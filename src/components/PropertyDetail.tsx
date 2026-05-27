@@ -6,8 +6,7 @@ import { PropertyForm } from './PropertyForm'
 import { TenantForm } from './TenantForm'
 import { LeaseForm } from './LeaseForm'
 import { PaymentForm } from './PaymentForm'
-import { ChevronLeft, MapPin, Building2, Plus, Pencil, X, CheckCircle, Upload, FileText } from 'lucide-react'
-import { useAuth } from '../lib/AuthContext'
+import { ChevronLeft, MapPin, Building2, Plus, Pencil, CheckCircle } from 'lucide-react'
 
 interface FullProperty {
   id: string
@@ -25,21 +24,6 @@ interface FullProperty {
   status: string
   monthly_management_fee: number
   notes: string | null
-  cc_payment_method: string | null
-  cc_platform: string | null
-  electric_billing: string | null
-  e_bill_platform: string | null
-  re_tax_schedule: string | null
-  lease_term_display: string | null
-  lease_document_url: string | null
-  renewal_notice_date: string | null
-  lease_start: string | null
-  lease_end: string | null
-  parking_spot: string | null
-  monthly_parking_fee: number | null
-  storage_unit: string | null
-  pet_policy: string | null
-  pet_deposit: number | null
 }
 
 interface TenantInfo {
@@ -49,29 +33,18 @@ interface TenantInfo {
   email: string | null
   phone: string | null
   move_in_date: string | null
-  move_out_date: string | null
   emergency_contact_name: string | null
   emergency_contact_phone: string | null
-  status: string
-  guarantor_name: string | null
-  guarantor_phone: string | null
-  guarantor_email: string | null
-  guarantor_relationship: string | null
 }
 
 interface LeaseInfo {
   id: string
-  tenant_id: string
   lease_start: string
   lease_end: string
   monthly_rent: number
   security_deposit: number | null
   rent_due_day: number
   status: string
-  deposit_returned_date: string | null
-  deposit_returned_amount: number | null
-  deposit_deductions: number | null
-  deposit_deduction_notes: string | null
 }
 
 export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onBack: () => void }) {
@@ -79,7 +52,6 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [tenant, setTenant] = useState<TenantInfo | null>(null)
   const [lease, setLease] = useState<LeaseInfo | null>(null)
   const [allTenants, setAllTenants] = useState<any[]>([])
-  const [allLeases, setAllLeases] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [showPropForm, setShowPropForm] = useState(false)
@@ -87,26 +59,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
   const [editTenant, setEditTenant] = useState<any>(null)
   const [showLeaseForm, setShowLeaseForm] = useState(false)
   const [editLease, setEditLease] = useState<any>(null)
-  const [showRenewLeaseForm, setShowRenewLeaseForm] = useState(false)
-  const [renewPreset, setRenewPreset] = useState<any>(null)
-  const [showLeaseHistory, setShowLeaseHistory] = useState(false)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
-  const [editPayment, setEditPayment] = useState<any>(null)
-  const [payments, setPayments] = useState<any[]>([])
-  const [deleteConfirmPayment, setDeleteConfirmPayment] = useState<string | null>(null)
-  const [showExpenseForm, setShowExpenseForm] = useState(false)
-
-  const [expenses, setExpenses] = useState<any[]>([])
-
-  const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [uploadResult, setUploadResult] = useState<any>(null)
-  const [uploadError, setUploadError] = useState('')
-  const [dropboxFiles, setDropboxFiles] = useState<any[]>([])
-  const [filesLoading, setFilesLoading] = useState(true)
-
-  const { profile } = useAuth()
-  const isAdmin = profile?.role === 'admin'
 
   useEffect(() => { loadProperty() }, [propertyId])
 
@@ -116,114 +69,33 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
       if (props) {
         setProperty(props)
 
+        // Get all tenants for this property
         const { data: tenantsData } = await supabase.from('tenants').select('*').eq('property_id', propertyId)
         if (tenantsData) setAllTenants(tenantsData)
 
+        // Get active or most recent lease
         const { data: leasesData } = await supabase
           .from('leases')
           .select('*')
           .eq('property_id', propertyId)
           .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
 
-        setAllLeases(leasesData || [])
-
-        const currentLease = (leasesData || []).find(l => l.status === 'active') || (leasesData || [])[0] || null
-
-        if (currentLease) {
-          setLease(currentLease)
+        if (leasesData) {
+          setLease(leasesData)
           const { data: tenantData } = await supabase
             .from('tenants')
             .select('*')
-            .eq('id', currentLease.tenant_id)
+            .eq('id', leasesData.tenant_id)
             .single()
           if (tenantData) setTenant(tenantData)
         }
-
-        // Load expenses
-        const { data: expData } = await supabase
-          .from('expenses')
-          .select('*')
-          .eq('property_id', propertyId)
-          .order('date', { ascending: false })
-          .limit(20)
-        if (expData) setExpenses(expData)
-
-        // Load payment history
-        const { data: payData } = await supabase
-          .from('payments')
-          .select('*')
-          .eq('property_id', propertyId)
-          .order('payment_date', { ascending: false })
-          .limit(50)
-        if (payData) setPayments(payData)
       }
     } catch (err) {
       console.error('Failed to load property:', err)
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function loadDropboxFiles() {
-    if (!property) return
-    setFilesLoading(true)
-    try {
-      const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
-      const folderName = `${property.address}${property.unit_number ? ` #${property.unit_number.trim()}` : ''}`
-      const res = await fetch(`${API}/api/dropbox-list?property=${encodeURIComponent(folderName)}`)
-      if (res.ok) {
-        const data = await res.json()
-        setDropboxFiles(data.entries || [])
-      }
-    } catch (err) {
-      console.error('Failed to load Dropbox files:', err)
-    } finally {
-      setFilesLoading(false)
-    }
-  }
-
-  useEffect(() => { loadDropboxFiles() }, [property])
-
-  async function handleFileUpload(file: File | undefined | null) {
-    if (!file || !property) return
-    setUploading(true)
-    setUploadProgress(0)
-    setUploadResult(null)
-    setUploadError('')
-
-    try {
-      const folderName = `${property.address}${property.unit_number ? ` #${property.unit_number.trim()}` : ''}`
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('property', folderName)
-      formData.append('category', 'Documents')
-
-      const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
-
-      const res = await fetch(`${API}/api/dropbox-upload`, {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || `HTTP ${res.status}`)
-      }
-
-      const result = await res.json()
-      setUploadResult(result)
-
-      await supabase.from('activity_log').insert({
-        property_id: propertyId,
-        action: 'File uploaded',
-        details: `Uploaded ${file.name} to Dropbox`,
-        source: 'manual'
-      })
-      loadDropboxFiles()
-    } catch (err: any) {
-      setUploadError(err.message || 'Upload failed')
-    } finally {
-      setUploading(false)
     }
   }
 
@@ -267,54 +139,19 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
               <div className="detail-field-label">Bedrooms / Bathrooms</div>
               <div className="detail-field-value">{property.bedrooms} bed / {property.bathrooms} bath</div>
             </div>
-            {isAdmin && (
-              <div className="detail-field">
-                <div className="detail-field-label">Management Fee</div>
-                <div className="detail-field-value">${Number(property.monthly_management_fee || 0).toLocaleString()}/mo</div>
-              </div>
-            )}
+            <div className="detail-field">
+              <div className="detail-field-label">Management Fee</div>
+              <div className="detail-field-value">${Number(property.monthly_management_fee || 0).toLocaleString()}/mo</div>
+            </div>
             {property.notes && (
               <div className="detail-field">
                 <div className="detail-field-label">Notes</div>
                 <div className="detail-field-value">{property.notes}</div>
               </div>
             )}
-
-            {(property.parking_spot || property.storage_unit || property.pet_policy) && (
-              <>
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                  <div className="detail-field-label" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 8 }}>Property Extras</div>
-                </div>
-                {property.parking_spot && (
-                  <div className="detail-field">
-                    <div className="detail-field-label">Parking Spot</div>
-                    <div className="detail-field-value">
-                      {property.parking_spot}
-                      {property.monthly_parking_fee ? ` ($${Number(property.monthly_parking_fee).toLocaleString()}/mo)` : ''}
-                    </div>
-                  </div>
-                )}
-                {property.storage_unit && (
-                  <div className="detail-field">
-                    <div className="detail-field-label">Storage Unit</div>
-                    <div className="detail-field-value">{property.storage_unit}</div>
-                  </div>
-                )}
-                {property.pet_policy && property.pet_policy !== 'Not Allowed' && (
-                  <div className="detail-field">
-                    <div className="detail-field-label">Pet Policy</div>
-                    <div className="detail-field-value">
-                      {property.pet_policy}
-                      {property.pet_deposit ? ` ($${Number(property.pet_deposit).toLocaleString()} deposit)` : ''}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
           </div>
         </div>
 
-        {isAdmin && (
         <div className="card">
           <div className="card-header"><h3>Owner Information</h3></div>
           <div className="card-body">
@@ -336,85 +173,8 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
             )}
           </div>
         </div>
-        )}
 
-        <div className="card">
-          <div className="card-header"><h3>Billing & Utilities</h3></div>
-          <div className="card-body">
-            {property.cc_payment_method && (
-              <div className="detail-field">
-                <div className="detail-field-label">CC Payment Method</div>
-                <div className="detail-field-value">{property.cc_payment_method}</div>
-              </div>
-            )}
-            {property.cc_platform && (
-              <div className="detail-field">
-                <div className="detail-field-label">CC Platform</div>
-                <div className="detail-field-value">{property.cc_platform}</div>
-              </div>
-            )}
-            {property.electric_billing && (
-              <div className="detail-field">
-                <div className="detail-field-label">Electric Billing</div>
-                <div className="detail-field-value">{property.electric_billing}</div>
-              </div>
-            )}
-            {property.e_bill_platform && (
-              <div className="detail-field">
-                <div className="detail-field-label">E-Bill Platform</div>
-                <div className="detail-field-value">{property.e_bill_platform}</div>
-              </div>
-            )}
-            {property.re_tax_schedule && (
-              <div className="detail-field">
-                <div className="detail-field-label">RE Tax Schedule</div>
-                <div className="detail-field-value">{property.re_tax_schedule}</div>
-              </div>
-            )}
-            {property.lease_term_display && (
-              <div className="detail-field">
-                <div className="detail-field-label">Lease Term</div>
-                <div className="detail-field-value">{property.lease_term_display}</div>
-              </div>
-            )}
-            {property.lease_start && (
-              <div className="detail-field">
-                <div className="detail-field-label">Lease Start</div>
-                <div className="detail-field-value">{new Date(property.lease_start).toLocaleDateString()}</div>
-              </div>
-            )}
-            {property.lease_end && (
-              <div className="detail-field">
-                <div className="detail-field-label">Lease End</div>
-                <div className="detail-field-value" style={{
-                  color: new Date(property.lease_end) < new Date() ? 'var(--red)' :
-                         new Date(property.lease_end) < new Date(Date.now() + 30*24*60*60*1000) ? 'var(--yellow)' : 'inherit',
-                  fontWeight: new Date(property.lease_end) < new Date() ? 600 : 'normal'
-                }}>
-                  {new Date(property.lease_end).toLocaleDateString()}
-                  {new Date(property.lease_end) < new Date() ? ' (EXPIRED)' : ''}
-                </div>
-              </div>
-            )}
-            {property.renewal_notice_date && (
-              <div className="detail-field">
-                <div className="detail-field-label">Renewal Notice Date</div>
-                <div className="detail-field-value">{new Date(property.renewal_notice_date).toLocaleDateString()}</div>
-              </div>
-            )}
-            {property.lease_document_url && (
-              <div className="detail-field">
-                <div className="detail-field-label">Lease Document</div>
-                <div className="detail-field-value">
-                  <a href={property.lease_document_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>
-                    View Lease
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
+        {/* Tenant section */}
         <div className="card">
           <div className="card-header">
             <h3> Tenant</h3>
@@ -463,40 +223,6 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                     <div className="detail-field-value">{tenant.emergency_contact_name} {tenant.emergency_contact_phone ? `(${tenant.emergency_contact_phone})` : ''}</div>
                   </div>
                 )}
-                {tenant.status === 'former' && tenant.move_out_date && (
-                  <div className="detail-field">
-                    <div className="detail-field-label">Move Out Date</div>
-                    <div className="detail-field-value" style={{ color: 'var(--red)' }}>{new Date(tenant.move_out_date).toLocaleDateString()}</div>
-                  </div>
-                )}
-                {(tenant.guarantor_name || tenant.guarantor_phone || tenant.guarantor_email) && (
-                  <>
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                      <div className="detail-field-label" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 8 }}>Guarantor</div>
-                    </div>
-                    {tenant.guarantor_name && (
-                      <div className="detail-field">
-                        <div className="detail-field-label">Name</div>
-                        <div className="detail-field-value">
-                          {tenant.guarantor_name}
-                          {tenant.guarantor_relationship ? ` (${tenant.guarantor_relationship})` : ''}
-                        </div>
-                      </div>
-                    )}
-                    {tenant.guarantor_phone && (
-                      <div className="detail-field">
-                        <div className="detail-field-label">Phone</div>
-                        <div className="detail-field-value">{tenant.guarantor_phone}</div>
-                      </div>
-                    )}
-                    {tenant.guarantor_email && (
-                      <div className="detail-field">
-                        <div className="detail-field-label">Email</div>
-                        <div className="detail-field-value">{tenant.guarantor_email}</div>
-                      </div>
-                    )}
-                  </>
-                )}
               </>
             ) : (
               <div className="empty-state" style={{ padding: '24px 12px' }}>
@@ -511,6 +237,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           </div>
         </div>
 
+        {/* Lease section */}
         <div className="card">
           <div className="card-header">
             <h3>Lease</h3>
@@ -525,41 +252,16 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           <div className="card-body">
             {lease ? (
               <>
-                {isAdmin && (
                 <div className="detail-field">
                   <div className="detail-field-label">Monthly Rent</div>
                   <div className="detail-field-value" style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>
                     ${Number(lease.monthly_rent).toLocaleString()}/mo
                     <button onClick={() => { setEditLease(lease); setShowLeaseForm(true) }} style={{
-                      border: '1px solid var(--accent)', borderRadius: 4,
-                      color: 'var(--accent)', cursor: 'pointer',
-                      marginLeft: 8, fontSize: 11, padding: '2px 6px',
-                      background: 'transparent'
+                      background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer',
+                      marginLeft: 8, fontSize: 11
                     }}>Edit</button>
-                    <button onClick={() => {
-                      const end = new Date(lease.lease_end)
-                      const newStart = new Date(end.getTime() + 24*60*60*1000)
-                      const newEnd = new Date(newStart.getTime() + 365*24*60*60*1000)
-                      setRenewPreset({
-                        tenant_id: lease.tenant_id || '',
-                        lease_start: newStart.toISOString().split('T')[0],
-                        lease_end: newEnd.toISOString().split('T')[0],
-                        monthly_rent: String(lease.monthly_rent || ''),
-                        security_deposit: String(lease.security_deposit || ''),
-                        rent_due_day: String(lease.rent_due_day || '1'),
-                        auto_renew: true,
-                        status: 'active',
-                        notes: '',
-                      })
-                      setShowRenewLeaseForm(true)
-                    }} style={{
-                      background: 'none', border: '1px solid var(--accent)', borderRadius: 4,
-                      color: 'var(--accent)', cursor: 'pointer',
-                      marginLeft: 8, fontSize: 11, padding: '2px 6px'
-                    }}>Renew</button>
                   </div>
                 </div>
-                )}
                 <div className="detail-field">
                   <div className="detail-field-label">Lease Period</div>
                   <div className="detail-field-value">
@@ -570,7 +272,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                   <div className="detail-field-label">Rent Due Day</div>
                   <div className="detail-field-value">{lease.rent_due_day}th of each month</div>
                 </div>
-                {isAdmin && lease.security_deposit && (
+                {lease.security_deposit && (
                   <div className="detail-field">
                     <div className="detail-field-label">Security Deposit</div>
                     <div className="detail-field-value">${Number(lease.security_deposit).toLocaleString()}</div>
@@ -591,48 +293,15 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                   </div>
                 </div>
 
-                {/* Deposit return info for expired/terminated leases */}
-                {lease.deposit_returned_date && (
-                  <>
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                      <div className="detail-field-label" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 8 }}>Deposit Return</div>
-                    </div>
-                    <div className="detail-field">
-                      <div className="detail-field-label">Returned Date</div>
-                      <div className="detail-field-value">{new Date(lease.deposit_returned_date).toLocaleDateString()}</div>
-                    </div>
-                    {lease.deposit_returned_amount && (
-                      <div className="detail-field">
-                        <div className="detail-field-label">Amount Returned</div>
-                        <div className="detail-field-value" style={{ color: 'var(--green)' }}>${Number(lease.deposit_returned_amount).toLocaleString()}</div>
-                      </div>
-                    )}
-                    {lease.deposit_deductions && Number(lease.deposit_deductions) > 0 && (
-                      <div className="detail-field">
-                        <div className="detail-field-label">Deductions</div>
-                        <div className="detail-field-value" style={{ color: 'var(--red)' }}>${Number(lease.deposit_deductions).toLocaleString()}</div>
-                      </div>
-                    )}
-                    {lease.deposit_deduction_notes && (
-                      <div className="detail-field">
-                        <div className="detail-field-label">Deduction Notes</div>
-                        <div className="detail-field-value" style={{ fontSize: 12 }}>{lease.deposit_deduction_notes}</div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {isAdmin && (
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                  <button
-                    className="btn btn-primary"
+                  <button 
+                    className="btn btn-primary" 
                     style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: 8 }}
                     onClick={() => setShowPaymentForm(true)}
                   >
                     <CheckCircle size={16} /> Log Rent Payment
                   </button>
                 </div>
-                )}
               </>
             ) : (
               <div className="empty-state" style={{ padding: '24px 12px' }}>
@@ -641,276 +310,9 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
             )}
           </div>
         </div>
-
-        {/* Expenses Card */}
-        <div className="card">
-          <div className="card-header">
-            <h3>Expenses {expenses.length > 0 ? `(${expenses.length})` : ''}</h3>
-            {isAdmin && (
-            <button onClick={() => { setShowExpenseForm(true) }} style={{
-              border: '1px solid var(--accent)', borderRadius: 4,
-              color: 'var(--accent)', cursor: 'pointer',
-              fontSize: 11, padding: '4px 8px',
-              background: 'transparent', display: 'flex', alignItems: 'center', gap: 4
-            }}>
-              <Plus size={12} /> Add Expense
-            </button>
-            )}
-          </div>
-          <div className="card-body">
-            {expenses.length > 0 ? (
-              <>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-                Recent expenses for this property
-              </div>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Category</th>
-                    <th>Amount</th>
-                    <th>Vendor</th>
-                    <th>Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {expenses.slice(0, 20).map((e: any) => (
-                    <tr key={e.id}>
-                      <td>{e.date ? new Date(e.date).toLocaleDateString() : '—'}</td>
-                      <td>{e.category?.replace(/_/g, ' ')}</td>
-                      <td style={{ fontWeight: 600, color: 'var(--red)' }}>${Number(e.amount || 0).toLocaleString()}</td>
-                      <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{e.vendor || '—'}</td>
-                      <td style={{ color: 'var(--text-secondary)', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {e.description || '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </>
-            ) : (
-              <div className="empty-state" style={{ padding: '12px' }}>
-                <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>No expenses logged yet</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Payment History */}
-        {payments.length > 0 && (
-          <div className="card">
-            <div className="card-header"><h3>Payment History ({payments.length})</h3></div>
-            <div className="card-body">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Method</th>
-                    <th>Status</th>
-                    <th>Notes</th>
-                    {isAdmin && <th style={{ width: 60 }}></th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((p: any) => {
-                    const statusColor = p.status === 'received' ? 'var(--green)' : p.status === 'partial' ? 'var(--yellow)' : 'var(--text-muted)'
-                    const isPartialRent = p.status === 'partial' && p.amount < (lease?.monthly_rent ?? Infinity)
-                    return (
-                      <tr key={p.id}>
-                        <td>{p.payment_date ? new Date(p.payment_date + 'T12:00:00').toLocaleDateString() : '—'}</td>
-                        <td style={{ fontWeight: 600 }}>
-                          ${Number(p.amount).toLocaleString()}
-                          {isPartialRent && <span style={{ fontSize: 10, color: 'var(--yellow)', marginLeft: 4 }}>partial</span>}
-                        </td>
-                        <td style={{ fontSize: 12 }}>{p.payment_method || '—'}</td>
-                        <td>
-                          <span style={{
-                            fontSize: 11, padding: '2px 6px', borderRadius: 4,
-                            background: statusColor === 'var(--green)' ? 'rgba(16,185,129,0.15)' : statusColor === 'var(--yellow)' ? 'rgba(245,158,11,0.15)' : 'rgba(100,116,139,0.15)',
-                            color: statusColor
-                          }}>
-                            {p.status === 'received' ? 'Received' : p.status === 'partial' ? 'Partial' : p.status === 'pending' ? 'Pending' : p.status}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {p.adjustment_reason ? (
-                            <span title={p.adjustment_reason}>
-                              🔄 {p.adjustment_reason}
-                            </span>
-                          ) : p.notes ? (
-                            <span title={p.notes}>{p.notes}</span>
-                          ) : '—'}
-                        </td>
-                        {isAdmin && (
-                          <td>
-                            <div style={{ display: 'flex', gap: 4 }}>
-                              <button onClick={() => {
-                                setEditPayment(p)
-                                setShowPaymentForm(true)
-                              }} style={{
-                                background: 'none', border: 'none', color: 'var(--accent)',
-                                cursor: 'pointer', fontSize: 11, padding: '2px 4px'
-                              }} title="Edit payment">✏️</button>
-                              <button onClick={() => setDeleteConfirmPayment(p.id)} style={{
-                                background: 'none', border: 'none', color: 'var(--red)',
-                                cursor: 'pointer', fontSize: 11, padding: '2px 4px'
-                              }} title="Delete payment">🗑️</button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Delete Payment Confirmation */}
-        {deleteConfirmPayment && (
-          <div className="modal-overlay" onClick={() => setDeleteConfirmPayment(null)}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
-              <div className="modal-header">
-                <h3>Delete Payment?</h3>
-                <button className="filter-btn" onClick={() => setDeleteConfirmPayment(null)}><X size={16} /></button>
-              </div>
-              <div className="modal-body" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                <p>This will permanently remove this payment record. This action cannot be undone.</p>
-              </div>
-              <div className="modal-footer" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button className="btn" onClick={() => setDeleteConfirmPayment(null)}>Cancel</button>
-                <button className="btn" style={{
-                  background: 'var(--red)', color: 'white', border: 'none'
-                }} onClick={async () => {
-                  try {
-                    await supabase.from('payments').delete().eq('id', deleteConfirmPayment)
-                    setPayments(p => p.filter(pay => pay.id !== deleteConfirmPayment))
-                  } catch (err) {
-                    console.error('Failed to delete payment:', err)
-                    alert('Failed to delete payment')
-                  }
-                  setDeleteConfirmPayment(null)
-                }}>Delete</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Lease History */}
-        {allLeases.length > 1 && (
-          <div className="card">
-            <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => setShowLeaseHistory(!showLeaseHistory)}>
-              <h3>Lease History ({allLeases.length})</h3>
-              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                {showLeaseHistory ? '▲ Hide' : '▼ Show'}
-              </span>
-            </div>
-            {showLeaseHistory && (
-              <div className="card-body">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Tenant</th>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>Rent</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allLeases.map((l: any) => {
-                      const t = allTenants.find(t => t.id === l.tenant_id)
-                      return (
-                        <tr key={l.id} style={{
-                          opacity: l.status === 'active' ? 1 : 0.6
-                        }}>
-                          <td style={{ fontWeight: 500 }}>{t ? `${t.first_name} ${t.last_name}` : '—'}</td>
-                          <td>{l.lease_start ? new Date(l.lease_start).toLocaleDateString() : '—'}</td>
-                          <td>{l.lease_end ? new Date(l.lease_end).toLocaleDateString() : '—'}</td>
-                          <td>${Number(l.monthly_rent || 0).toLocaleString()}</td>
-                          <td><StatusBadge status={l.status} /></td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="card">
-          <div className="card-header"><h3>Files</h3></div>
-          <div className="card-body">
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-              Upload files to this property's Dropbox folder.
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <label style={{
-                padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
-                background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 6, fontSize: 13
-              }}>
-                <Upload size={14} /> Upload File
-                <input type="file" style={{ display: 'none' }}
-                  onChange={(e) => handleFileUpload(e.target.files?.[0])} />
-              </label>
-            </div>
-            {uploading && (
-              <div style={{ marginTop: 12, fontSize: 13, color: 'var(--text-muted)' }}>
-                Uploading... {uploadProgress > 0 && `${uploadProgress}%`}
-              </div>
-            )}
-            {uploadResult && (
-              <div style={{ marginTop: 12, fontSize: 13, color: 'var(--green)' }}>
-                ✓ Uploaded
-                {uploadResult.url && (
-                  <a href={uploadResult.url} target="_blank" rel="noopener noreferrer"
-                    style={{ color: 'var(--accent)', marginLeft: 8 }}>
-                    <FileText size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                    View
-                  </a>
-                )}
-              </div>
-            )}
-            {uploadError && (
-              <div style={{ marginTop: 12, fontSize: 13, color: 'var(--red)' }}>
-                ✗ {uploadError}
-              </div>
-            )}
-
-            {filesLoading ? (
-              <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-                Loading files...
-              </div>
-            ) : dropboxFiles.length > 0 ? (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                  Existing Files
-                </div>
-                {dropboxFiles.map((file: any, i: number) => (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '8px 0', borderBottom: '1px solid var(--border)',
-                    fontSize: 12
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <FileText size={14} style={{ color: 'var(--text-muted)' }} />
-                      <span>{file.name}</span>
-                    </div>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                      {file.size ? `${(file.size / 1024).toFixed(0)} KB` : ''}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
       </div>
 
+      {/* Modals */}
       <Modal open={showPropForm} onClose={() => setShowPropForm(false)} title="Edit Property" width="640px">
         <PropertyForm property={property} onSaved={() => { setShowPropForm(false); loadProperty() }} onCancel={() => setShowPropForm(false)} />
       </Modal>
@@ -929,101 +331,20 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           onCancel={() => { setShowLeaseForm(false); setEditLease(null) }} />
       </Modal>
 
-      {/* Renew Lease Modal — pre-populated, custom save expires old lease */}
-      <Modal open={showRenewLeaseForm} onClose={() => { setShowRenewLeaseForm(false); setRenewPreset(null) }}
-        title="Renew Lease" width="560px">
-        {renewPreset && lease && (
-          <LeaseForm propertyId={propertyId} tenants={allTenants} lease={renewPreset}
-            onSaved={async () => {
-              // Expire the old lease
-              await supabase.from('leases').update({ status: 'expired' }).eq('id', lease.id)
-              setShowRenewLeaseForm(false)
-              setRenewPreset(null)
-              loadProperty()
-            }}
-            onCancel={() => { setShowRenewLeaseForm(false); setRenewPreset(null) }} />
-        )}
-      </Modal>
-
-      <Modal open={showPaymentForm} onClose={() => { setShowPaymentForm(false); setEditPayment(null) }}
-        title={editPayment ? 'Edit Payment' : 'Log Payment'} width="480px">
+      <Modal open={showPaymentForm} onClose={() => setShowPaymentForm(false)} title="Log Payment" width="480px">
         {lease && (
-          <PaymentForm
+          <PaymentForm 
             propertyId={propertyId}
             leaseId={lease.id}
             tenantId={tenant?.id || null}
             rentAmount={lease.monthly_rent}
-            payment={editPayment}
             onSaved={() => {
               setShowPaymentForm(false)
-              setEditPayment(null)
               loadProperty()
             }}
-            onCancel={() => { setShowPaymentForm(false); setEditPayment(null) }}
+            onCancel={() => setShowPaymentForm(false)}
           />
         )}
-      </Modal>
-
-      {/* Add Expense Modal */}
-      <Modal open={showExpenseForm} onClose={() => setShowExpenseForm(false)} title="Add Expense" width="500px">
-        <form onSubmit={async (e) => {
-          e.preventDefault()
-          const formData = new FormData(e.currentTarget)
-          try {
-            const { error } = await supabase.from('expenses').insert({
-              property_id: propertyId,
-              category: formData.get('category'),
-              amount: parseFloat(formData.get('amount') as string),
-              date: formData.get('date'),
-              vendor: formData.get('vendor') || null,
-              description: formData.get('description') || null,
-              notes: formData.get('notes') || null
-            })
-            if (error) throw error
-            setShowExpenseForm(false)
-            loadProperty()
-          } catch (err: any) {
-            alert('Failed to save expense: ' + err.message)
-          }
-        }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Category *</label>
-              <select name="category" required style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }}>
-                <option value="maintenance">Maintenance & Repairs</option>
-                <option value="taxes">Real Estate Taxes</option>
-                <option value="insurance">Insurance</option>
-                <option value="utilities">Utilities</option>
-                <option value="common_charges">Common Charges</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Amount *</label>
-              <input name="amount" type="number" step="0.01" min="0" required style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} placeholder="0.00" />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Date *</label>
-              <input name="date" type="date" required style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Paid To</label>
-              <input name="vendor" type="text" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} placeholder="Vendor name" />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Description</label>
-              <input name="description" type="text" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} placeholder="What was this for?" />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Notes</label>
-              <textarea name="notes" rows={2} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }} placeholder="Receipt number, invoice reference, etc." />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-            <button type="button" className="btn" onClick={() => setShowExpenseForm(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary">Save Expense</button>
-          </div>
-        </form>
       </Modal>
     </div>
   )

@@ -4,7 +4,6 @@ import { StatusBadge } from './ui/StatusBadge'
 import { Modal } from './ui/Modal'
 import { PropertyForm } from './PropertyForm'
 import { Building2, MapPin, Plus, Pencil } from 'lucide-react'
-import { useAuth } from '../lib/AuthContext'
 
 interface Property {
   id: string
@@ -17,9 +16,6 @@ interface Property {
   owner_name: string
   status: string
   monthly_management_fee: number
-  cc_payment_method: string | null
-  cc_platform: string | null
-  re_tax_schedule: string | null
 }
 
 interface LeaseInfo {
@@ -30,8 +26,6 @@ interface LeaseInfo {
 }
 
 export function PropertyList({ onViewProperty }: { onViewProperty: (id: string) => void }) {
-  const { profile } = useAuth()
-  const isAdmin = profile?.role === 'admin'
   const [properties, setProperties] = useState<Property[]>([])
   const [leaseMap, setLeaseMap] = useState<Record<string, LeaseInfo>>({})
   const [loading, setLoading] = useState(true)
@@ -161,7 +155,7 @@ export function PropertyList({ onViewProperty }: { onViewProperty: (id: string) 
                   >
                     <Pencil size={14} />
                   </button>
-                  {lease && isAdmin && (
+                  {lease && (
                     <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--green)' }}>
                       ${Number(lease.monthly_rent).toLocaleString()}/mo
                     </span>
@@ -172,15 +166,9 @@ export function PropertyList({ onViewProperty }: { onViewProperty: (id: string) 
               {lease && (
                 <div className="property-card-sub">
                   <span>Tenant: {lease.tenant_name}</span>
-                  <span>Lease: {new Date(lease.lease_end).toLocaleDateString()}</span>
+                  <span>Lease ends: {new Date(lease.lease_end).toLocaleDateString()}</span>
                 </div>
               )}
-              <div className="property-card-sub" style={{ marginTop: 4 }}>
-                {isAdmin && p.monthly_management_fee ? <span>Mgmt fee: ${Number(p.monthly_management_fee).toLocaleString()}/mo</span> : null}
-                {p.cc_payment_method ? <span>Pay: {p.cc_payment_method}</span> : null}
-                {p.cc_platform && !p.cc_platform.startsWith('http') ? <span>{p.cc_platform}</span> : null}
-                {p.re_tax_schedule ? <span>Tax: {p.re_tax_schedule}</span> : null}
-              </div>
             </div>
           )
         })}

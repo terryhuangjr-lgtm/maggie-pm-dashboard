@@ -1,6 +1,38 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Calendar as CalendarIcon, Clock, DollarSign, AlertTriangle, Plus, X, MapPin, User, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, DollarSign, AlertTriangle, Plus, X, MapPin, User } from 'lucide-react'
+
+interface CalendarEvent {
+  id?: string
+  date: string
+  label: string
+  type: 'lease_expiry' | 'rent_due' | 'task_due' | 'inspection' | 'appointment' | 'meeting' | 'showing' | 'maintenance'
+  property: string
+  details?: string
+}
+
+interface CalendarEventDB {
+  id: string
+  property_id: string | null
+  title: string
+  description: string | null
+  event_type: string
+  event_date: string
+  event_time: string | null
+  duration_minutes: number
+  location: string | null
+  contact_name: string | null
+  contact_phone: string | null
+  status: string
+  created_by: string
+  created_at: string
+}
+
+interface Property {
+  id: string
+  address: string
+  unit_number: string | null
+}
 
 const EVENT_COLORS: Record<string, { bg: string; color: string; dot: string }> = {
   lease_expiry: { bg: 'rgba(239, 68, 68, 0.15)', color: 'var(--red)', dot: '#ef4444' },
@@ -13,9 +45,9 @@ const EVENT_COLORS: Record<string, { bg: string; color: string; dot: string }> =
   maintenance: { bg: 'rgba(249, 115, 22, 0.15)', color: '#f97316', dot: '#f97316' }
 }
 
-type EditableEventType = 'appointment' | 'meeting' | 'showing' | 'maintenance' | 'inspection'
+type EventFormType = 'appointment' | 'meeting' | 'showing' | 'maintenance' | 'inspection'
 
-const EVENT_TYPE_LABELS: Record<EditableEventType, string> = {
+const EVENT_TYPE_LABELS: Record<EventFormType, string> = {
   appointment: 'Appointment',
   meeting: 'Meeting',
   showing: 'Property Showing',
@@ -23,21 +55,21 @@ const EVENT_TYPE_LABELS: Record<EditableEventType, string> = {
   inspection: 'Inspection'
 }
 
-const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
 export function CalendarView() {
-  const [events, setEvents] = useState<any[]>([])
+  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [dbEvents, setDbEvents] = useState<CalendarEventDB[]>([])
   const [loading, setLoading] = useState(true)
-  const [currentDate, setCurrentDate] = useState(
-    new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  )
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
   const [showForm, setShowForm] = useState(false)
-  const [editingEvent, setEditingEvent] = useState<any>(null)
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEventDB | null>(null)
+  const [properties, setProperties] = useState<Property[]>([])
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    event_type: 'appointment' as EditableEventType,
+    event_type: 'appointment' as EventFormType,
     event_date: new Date().toISOString().split('T')[0],
     event_time: '09:00',
     duration_minutes: 60,
@@ -47,82 +79,80 @@ export function CalendarView() {
     contact_phone: ''
   })
 
-  const year = currentDate.getFullYear()
-  const month = currentDate.getMonth()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const firstDayOfWeek = new Date(year, month, 1).getDay()
-  const todayStr = new Date().toISOString().split('T')[0]
-
-  const getLocalDateStr = (d: Date) => {
-    const offset = d.getTimezoneOffset()
-    const local = new Date(d.getTime() - offset * 60000)
-    return local.toISOString().split('T')[0]
+  function resetForm() {
+    setFormData({
+      title: '',
+      description: '',
+      event_type: 'appointment',
+      event_date: new Date().toISOString().split('T')[0],
+      event_time: '09:00',
+      duration_minutes: 60,
+      property_id: '',
+      location: '',
+      contact_name: '',
+      contact_phone: ''
+    })
   }
 
   useEffect(() => {
     loadEvents()
+    loadProperties()
   }, [])
 
-  useEffect(() => {
-    if (!selectedDate && events.length > 0) {
-      // Default to today
-      const today = getLocalDateStr(new Date())
-      setSelectedDate(today)
-    }
-  }, [events])
+  async function loadProperties() {
+    const { data } = await supabase.from('properties').select('id, address, unit_number').order('address')
+    if (data) setProperties(data)
+  }
 
   async function loadEvents() {
     try {
-      const calEvents: any[] = []
+      const calEvents: CalendarEvent[] = []
 
-      // Google Calendar events (SOURCE OF TRUTH for user-created events)
+      // Custom events from calendar_events table
+      const { data: customEvents } = await supabase
+        .from('calendar_events')
+        .select('*')
+        .order('event_date', { ascending: true })
+      
+      if (customEvents) {
+        setDbEvents(customEvents)
+        for (const e of customEvents) {
+          if (e.status === 'cancelled') continue
+          calEvents.push({
+            id: e.id,
+            date: e.event_date,
+            label: e.title,
+            type: (e.event_type as any) || 'appointment',
+            property: e.location || '—',
+            details: e.description || (e.event_time ? `${e.event_time.substring(0, 5)} · ${e.duration_minutes}min` : `${e.duration_minutes}min`)
+          })
+        }
+      }
+
+      // Google Calendar events (from agent-created events)
       try {
-        const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
-        const res = await fetch(`${API}/api/calendar`)
-        if (res.ok) {
-          const gcalEvents = await res.json()
+        const gcalRes = await fetch('/api/calendar')
+        if (gcalRes.ok) {
+          const gcalEvents = await gcalRes.json()
           for (const e of gcalEvents) {
-            const start = e.start?.dateTime || e.start?.date || ''
-            const dateOnly = start.includes('T') ? start.split('T')[0] : start
-            const timeStr = start.includes('T') ? start.split('T')[1]?.substring(0, 5) : ''
-            const isAllDay = !!e.start?.date && !e.start?.dateTime
-            const isMultiDay = isAllDay && e.end?.date && e.end.date !== e.start?.date
-
-            // Compute date range: for multi-day all-day events, expand to each day
-            const datesToShow: string[] = [dateOnly]
-            if (isMultiDay) {
-              const s = new Date(e.start.date + 'T12:00:00')
-              const en = new Date(e.end.date + 'T12:00:00')
-              // end.date is exclusive in Google Calendar API
-              const cursor = new Date(s)
-              cursor.setDate(cursor.getDate() + 1)
-              while (cursor < en) {
-                datesToShow.push(cursor.toISOString().split('T')[0])
-                cursor.setDate(cursor.getDate() + 1)
-              }
-            }
-
-            for (const d of datesToShow) {
-              calEvents.push({
-                id: e.id + (datesToShow.length > 1 ? '_' + d : ''),
-                date: d,
-                label: e.summary || 'Untitled',
-                type: 'appointment',
-                property: e.location || '—',
-                details: isMultiDay
-                  ? `All day (${datesToShow.length} days)`
-                  : isAllDay
-                    ? 'All day'
-                    : (timeStr ? `${timeStr} · Google Calendar` : 'Google Calendar'),
-                _custom: true,
-              _gcalId: e.id,
-              _gcalEvent: e
+            const start = e.start?.dateTime || e.start?.date
+            if (!start) continue
+            const eventDate = start.substring(0, 10)
+            const timeStr = e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' }) : 'All day'
+            const endStr = e.end?.dateTime ? new Date(e.end.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' }) : ''
+            const detail = endStr ? `${timeStr} - ${endStr}` : timeStr
+            calEvents.push({
+              id: e.id,
+              date: eventDate,
+              label: e.summary || 'Untitled',
+              type: 'appointment' as const,
+              property: e.location || '—',
+              details: detail
             })
           }
-          }
         }
-      } catch (err) {
-        console.error('Failed to load Google Calendar events:', err)
+      } catch (gcalErr) {
+        console.error('Failed to fetch Google Calendar events:', gcalErr)
       }
 
       // Lease expirations
@@ -187,7 +217,7 @@ export function CalendarView() {
         }
       }
 
-      setEvents(calEvents.sort((a: any, b: any) => a.date.localeCompare(b.date)))
+      setEvents(calEvents.sort((a, b) => a.date.localeCompare(b.date)))
     } catch (err) {
       console.error('Failed to load calendar events:', err)
     } finally {
@@ -195,119 +225,86 @@ export function CalendarView() {
     }
   }
 
-  function resetForm() {
-    setFormData({
-      title: '',
-      description: '',
-      event_type: 'appointment',
-      event_date: new Date().toISOString().split('T')[0],
-      event_time: '09:00',
-      duration_minutes: 60,
-      property_id: '',
-      location: '',
-      contact_name: '',
-      contact_phone: ''
-    })
-    setEditingEvent(null)
-  }
+  async function handleSave() {
+    const payload: any = {
+      title: formData.title,
+      description: formData.description || null,
+      event_type: formData.event_type,
+      event_date: formData.event_date,
+      event_time: formData.event_time || null,
+      duration_minutes: formData.duration_minutes,
+      location: formData.location || null,
+      contact_name: formData.contact_name || null,
+      contact_phone: formData.contact_phone || null,
+      property_id: formData.property_id || null,
+      created_by: 'dashboard'
+    }
 
-  function openEditEvent(ev: any) {
-    setEditingEvent(ev)
-    const start = ev.start?.dateTime || ev.start?.date || ''
-    const dateOnly = start.includes('T') ? start.split('T')[0] : start
-    const timeOnly = start.includes('T') ? start.split('T')[1]?.substring(0, 5) : ''
-    setFormData({
-      title: ev.summary || ev.title || '',
-      description: ev.description || '',
-      event_type: 'appointment',
-      event_date: dateOnly || '',
-      event_time: timeOnly || '09:00',
-      duration_minutes: 60,
-      property_id: '',
-      location: ev.location || '',
-      contact_name: '',
-      contact_phone: ''
-    })
-    setShowForm(true)
-  }
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    if (!formData.title.trim()) return
-
-    const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
-    const duration_hours = Math.max(1, Math.round((formData.duration_minutes || 60) / 60))
+    // Use service key for writes
+    const headers: Record<string, string> = {
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    }
 
     try {
-      const body = {
-        title: formData.title,
-        date: formData.event_date,
-        time: formData.event_time || undefined,
-        description: [formData.description, formData.location ? `Location: ${formData.location}` : '', formData.contact_name ? `Contact: ${formData.contact_name} ${formData.contact_phone || ''}` : ''].filter(Boolean).join('\n'),
-        duration_hours
-      }
-
-      if (editingEvent?._gcalId) {
-        // Update via Google Calendar API — use delete + create for simplicity
-        await fetch(`${API}/api/calendar?id=${editingEvent._gcalId}`, { method: 'DELETE' })
-      }
-
-      const res = await fetch(`${API}/api/calendar`, {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/calendar_events`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        headers,
+        body: JSON.stringify(payload)
       })
 
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || `HTTP ${res.status}`)
+      if (!res.ok && res.status !== 201) {
+        throw new Error(`HTTP ${res.status}`)
       }
 
       setShowForm(false)
       resetForm()
       await loadEvents()
     } catch (err) {
-      console.error('Failed to save event:', err)
-      alert('Failed to save event. Check console for details.')
+      console.error('Failed to create event:', err)
+      alert('Failed to create event. Check console for details.')
     }
   }
 
-  async function handleDelete(gcalId: string) {
-    if (!confirm('Delete this event from Google Calendar?')) return
+  async function handleDelete(eventId: string) {
+    if (!confirm('Cancel this event?')) return
 
-    const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
+    const headers: Record<string, string> = {
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    }
 
     try {
-      const res = await fetch(`${API}/api/calendar?id=${gcalId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setShowForm(false)
-      resetForm()
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/calendar_events?id=eq.${eventId}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status: 'cancelled' })
+      })
+      setSelectedEvent(null)
       await loadEvents()
     } catch (err) {
-      console.error('Failed to delete event:', err)
+      console.error('Failed to cancel event:', err)
     }
   }
 
-  const getEventsForDate = (dateStr: string) => events.filter((e: any) => e.date === dateStr)
+  const getEventsForDate = (dateStr: string) => events.filter(e => e.date === dateStr)
 
-  const firstDay = firstDayOfWeek
-  const prevMonthDays = new Date(year, month, 0).getDate()
+  const [year, month] = selectedMonth.split('-').map(Number)
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const today = new Date().toISOString().split('T')[0]
 
-  const days: ({ day: number; other: boolean })[] = []
-  for (let i = 0; i < firstDay; i++) {
-    days.push({ day: prevMonthDays - firstDay + i + 1, other: true })
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    days.push({ day: d, other: false })
-  }
-  const remaining = 7 - (days.length % 7)
-  if (remaining < 7) {
-    for (let i = 1; i <= remaining; i++) {
-      days.push({ day: i, other: true })
-    }
-  }
+  const days: (number | null)[] = []
+  for (let i = 0; i < firstDayOfWeek; i++) days.push(null)
+  for (let d = 1; d <= daysInMonth; d++) days.push(d)
 
-  const selectedDayEvents = selectedDate ? getEventsForDate(selectedDate) : []
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December']
 
   const eventIcons: Record<string, React.ReactNode> = {
     lease_expiry: <CalendarIcon size={14} />,
@@ -329,99 +326,100 @@ export function CalendarView() {
           <h1>Calendar</h1>
           <p>Lease expirations, rent due dates, inspections, appointments, and tasks</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(true) }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button className="btn btn-primary" onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Plus size={16} /> New Event
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
         {/* Calendar Grid */}
-        <div className="card" style={{ flex: 1, minWidth: 400 }}>
+        <div className="card" style={{ flex: 1, minWidth: 320 }}>
           <div className="card-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button className="filter-btn" onClick={() => { setCurrentDate(new Date(year, month - 1, 1)) }}>
-                <ChevronLeft size={16} />
-              </button>
-              <h3>{new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
-              <button className="filter-btn" onClick={() => { setCurrentDate(new Date(year, month + 1, 1)) }}>
-                <ChevronRight size={16} />
-              </button>
+            <h3>{monthNames[month - 1]} {year}</h3>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="filter-btn" onClick={() => {
+                const d = new Date(year, month - 2, 1)
+                setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+              }}>← Prev</button>
+              <button className="filter-btn" onClick={() => {
+                const d = new Date(year, month, 1)
+                setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+              }}>Next →</button>
             </div>
           </div>
           <div className="card-body" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, minWidth: 420 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 2, minWidth: 350 }}>
               {dayNames.map(d => (
-                <div key={d} style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', padding: '10px 0' }}>
+                <div key={d} style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', padding: '8px 0' }}>
                   {d}
                 </div>
               ))}
               {days.map((d, i) => {
-                const actualDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`
-                // But events are always on actual dates, so use actualDateStr for lookup
-                const lookupStr = actualDateStr
-                const dayEvts = getEventsForDate(lookupStr)
-                const isToday = lookupStr === todayStr
-                const isSelected = lookupStr === selectedDate
+                if (d === null) return <div key={`empty-${i}`} />
+                const dateStr = `${selectedMonth}-${String(d).padStart(2, '0')}`
+                const dayEvents = getEventsForDate(dateStr)
+                const isToday = dateStr === today
+                const hasCustomEvent = dayEvents.some(e => e.id)
                 return (
                   <div
-                    key={i}
-                    className={`calendar-day ${d.other ? 'other-month' : ''}`}
-                    onClick={() => setSelectedDate(lookupStr)}
+                    key={dateStr}
+                    onClick={() => {
+                      const custom = dbEvents.find(e => e.event_date === dateStr)
+                      if (custom) setSelectedEvent(custom)
+                      else {
+                        setFormData(prev => ({ ...prev, event_date: dateStr }))
+                        setShowForm(true)
+                      }
+                    }}
                     style={{
-                      minHeight: 110,
-                      background: isSelected
-                        ? 'var(--accent-light)'
-                        : isToday
-                          ? 'rgba(247, 147, 26, 0.08)'
-                          : 'transparent',
-                      border: isToday && isSelected
-                        ? '1.5px solid var(--accent)'
-                        : isToday
-                          ? '1px solid var(--accent)'
-                          : '1px solid var(--border)',
+                      minHeight: 90,
+                      background: isToday ? 'var(--accent-light)' : 'transparent',
+                      border: isToday ? '1px solid var(--accent)' : '1px solid var(--border)',
                       borderRadius: 8,
                       padding: 4,
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
-                      position: 'relative',
-                      opacity: d.other ? 0.4 : 1
+                      position: 'relative'
                     }}
                   >
                     <div style={{
-                      fontSize: 14,
+                      fontSize: 12,
                       fontWeight: isToday ? 700 : 500,
                       color: isToday ? 'var(--accent)' : 'var(--text-primary)',
-                      marginBottom: 4
+                      marginBottom: 2
                     }}>
-                      {d.day}
+                      {d}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {dayEvts.slice(0, 5).map((ev: any, ei: number) => {
-                        const colors = EVENT_COLORS[ev.type as keyof typeof EVENT_COLORS] || EVENT_COLORS.appointment
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {dayEvents.slice(0, 4).map((ev, ei) => {
+                        const colors = EVENT_COLORS[ev.type] || EVENT_COLORS.appointment
                         return (
                           <div
                             key={ei}
                             style={{
-                              fontSize: 10,
-                              padding: '2px 4px',
-                              borderRadius: 3,
+                              fontSize: 9,
+                              padding: '1px 3px',
+                              borderRadius: 2,
                               background: colors.bg,
                               color: colors.color,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
-                              lineHeight: '16px'
+                              lineHeight: '14px'
                             }}
                             title={`${ev.label} — ${ev.property}`}
                           >
-                            {ev.label.substring(0, 16)}
+                            {ev.label.substring(0, 12)}
                           </div>
                         )
                       })}
-                      {dayEvts.length > 4 && (
-                        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>+{dayEvts.length - 4} more</div>
+                      {dayEvents.length > 4 && (
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>+{dayEvents.length - 4} more</div>
                       )}
                     </div>
+                    {hasCustomEvent && (
+                      <div style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: 'var(--yellow)' }} />
+                    )}
                   </div>
                 )
               })}
@@ -438,74 +436,50 @@ export function CalendarView() {
           </div>
         </div>
 
-        {/* Selected Day Events List */}
-        <div className="card" style={{ width: 440, flexShrink: 0, maxHeight: 800, overflow: 'auto' }}>
-          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3>
-              {selectedDate
-                ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-                : 'Select a day'}
-            </h3>
-            {selectedDate && (
-              <button className="btn btn-sm btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => {
-                resetForm()
-                setFormData(prev => ({ ...prev, event_date: selectedDate! }))
-                setShowForm(true)
-              }}>
-                <Plus size={14} /> Add
-              </button>
-            )}
-          </div>
+        {/* Events Sidebar */}
+        <div className="card" style={{ width: 300, flexShrink: 0, maxHeight: 700, overflow: 'auto' }}>
+          <div className="card-header"><h3>All Events</h3></div>
           <div className="card-body">
-            {!selectedDate ? (
-              <div className="empty-state"><CalendarIcon /> <p>Click a day to see events</p></div>
-            ) : selectedDayEvents.length === 0 ? (
-              <div className="empty-state"><CalendarIcon /> <p>No events for this day</p></div>
+            {events.length === 0 ? (
+              <div className="empty-state"><CalendarIcon /> <p>No upcoming events</p></div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {selectedDayEvents.map((ev: any, i: number) => {
-                  const colors = EVENT_COLORS[ev.type as keyof typeof EVENT_COLORS] || EVENT_COLORS.appointment
-                  const isEditable = ev._custom && ev._gcalId
+                {events.slice(0, 30).map((ev, i) => {
+                  const [y, m, d] = ev.date.split('-').map(Number)
+                  const eventDate = new Date(y, m - 1, d, 12, 0, 0)
+                  const todayMid = new Date()
+                  todayMid.setHours(12, 0, 0, 0)
+                  const daysUntil = Math.ceil((eventDate.getTime() - todayMid.getTime()) / (1000 * 60 * 60 * 24))
+                  const colors = EVENT_COLORS[ev.type] || EVENT_COLORS.appointment
+                  const customEv = ev.id ? dbEvents.find(e => e.id === ev.id) : null
                   return (
                     <div
                       key={`${ev.date}-${i}`}
+                      onClick={() => customEv && setSelectedEvent(customEv)}
                       style={{
-                        padding: 14,
+                        padding: 10,
                         borderRadius: 8,
                         background: 'var(--bg-primary)',
                         border: '1px solid var(--border)',
+                        cursor: customEv ? 'pointer' : 'default',
                         borderLeft: `3px solid ${colors.dot}`
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                        <div style={{ flex: 1, cursor: isEditable ? 'pointer' : 'default' }}
-                          onClick={() => isEditable && openEditEvent(ev._gcalEvent)}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <span style={{ color: colors.color }}>{eventIcons[ev.type] || <Clock size={14} />}</span>
-                            <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{ev.label}</span>
-                          </div>
-                          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 3 }}>
-                            {ev.property}
-                          </div>
-                          {ev.details && (
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                              {ev.details}
-                            </div>
-                          )}
-                        </div>
-                        {isEditable && (
-                          <button
-                            onClick={() => handleDelete(ev._gcalId)}
-                            style={{
-                              background: 'none', border: 'none', color: 'var(--text-muted)',
-                              cursor: 'pointer', padding: 2, flexShrink: 0
-                            }}
-                            title="Cancel event"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ color: colors.color }}>{eventIcons[ev.type] || <Clock size={14} />}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>{ev.label}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>
+                        {ev.property}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)' }}>
+                        <span>{eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}</span>
+                        <span style={{
+                          color: daysUntil <= 0 ? 'var(--red)' : daysUntil <= 7 ? 'var(--yellow)' : 'var(--text-muted)',
+                          fontWeight: daysUntil <= 7 ? 600 : 400
+                        }}>
+                          {daysUntil < 0 ? `${Math.abs(daysUntil)} days ago` : daysUntil === 0 ? 'Today' : `${daysUntil} days`}
+                        </span>
                       </div>
                     </div>
                   )
@@ -516,110 +490,207 @@ export function CalendarView() {
         </div>
       </div>
 
-      {/* Add/Edit Event Modal */}
+      {/* Event Detail Modal */}
+      {selectedEvent && (
+        <div className="modal-overlay" onClick={() => setSelectedEvent(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <h3>{selectedEvent.title}</h3>
+              <button className="filter-btn" onClick={() => setSelectedEvent(null)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <span className="badge" style={{ background: EVENT_COLORS[selectedEvent.event_type]?.bg || EVENT_COLORS.appointment.bg, color: EVENT_COLORS[selectedEvent.event_type]?.color || '#f59e0b' }}>
+                    {selectedEvent.event_type.replace('_', ' ')}
+                  </span>
+                  <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: 'var(--blue)' }}>
+                    {selectedEvent.status}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 12px', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: 13 }}></span>
+                    <span>{new Date(selectedEvent.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                  {selectedEvent.event_time && <>
+                    <span style={{ color: 'var(--text-muted)' }}></span>
+                    <span>{selectedEvent.event_time.substring(0, 5)} · {selectedEvent.duration_minutes} min</span>
+                  </>}
+                  {selectedEvent.location && <>
+                    <span style={{ color: 'var(--text-muted)' }}></span>
+                    <span>{selectedEvent.location}</span>
+                  </>}
+                  {selectedEvent.contact_name && <>
+                    <span style={{ color: 'var(--text-muted)' }}></span>
+                    <span>{selectedEvent.contact_name}</span>
+                  </>}
+                  {selectedEvent.contact_phone && <>
+                    <span style={{ color: 'var(--text-muted)' }}></span>
+                    <span>{selectedEvent.contact_phone}</span>
+                  </>}
+                </div>
+                {selectedEvent.description && (
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, background: 'var(--bg-primary)', padding: 12, borderRadius: 8 }}>
+                    {selectedEvent.description}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-danger" onClick={() => handleDelete(selectedEvent.id)} style={{ fontSize: 13, padding: '6px 16px' }}>
+                Delete Event
+              </button>
+              <button className="btn" onClick={() => setSelectedEvent(null)} style={{ fontSize: 13, padding: '6px 16px' }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Event Form Modal */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+        <div className="modal-overlay" onClick={() => { setShowForm(false); resetForm(); }}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
-              <h3>{editingEvent ? 'Edit Event' : 'New Event'}</h3>
-              <button className="filter-btn" onClick={() => setShowForm(false)}><X size={16} /></button>
+              <h3>New Event</h3>
+              <button className="filter-btn" onClick={() => { setShowForm(false); resetForm(); }}><X size={16} /></button>
             </div>
-            <form onSubmit={handleSave}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Title *</label>
+            <div className="modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="form-group">
+                  <label className="form-label">Event Type</label>
+                  <select
+                    className="form-input"
+                    value={formData.event_type}
+                    onChange={e => setFormData(prev => ({ ...prev, event_type: e.target.value as EventFormType }))}
+                  >
+                    {Object.entries(EVENT_TYPE_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Title</label>
                   <input
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                    className="form-input"
+                    type="text"
                     value={formData.title}
-                    onChange={e => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Event title"
-                    autoFocus
-                    required
+                    onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="e.g., Handyman visit at 150 E 61st"
                   />
                 </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Date</label>
-                    <input type="date" style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                  <div className="form-group">
+                    <label className="form-label">Date</label>
+                    <input
+                      className="form-input"
+                      type="date"
                       value={formData.event_date}
-                      onChange={e => setFormData({ ...formData, event_date: e.target.value })} />
+                      onChange={e => setFormData(prev => ({ ...prev, event_date: e.target.value }))}
+                    />
                   </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Time</label>
-                    <input type="time" style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                  <div className="form-group">
+                    <label className="form-label">Time</label>
+                    <input
+                      className="form-input"
+                      type="time"
                       value={formData.event_time}
-                      onChange={e => setFormData({ ...formData, event_time: e.target.value })} />
+                      onChange={e => setFormData(prev => ({ ...prev, event_time: e.target.value }))}
+                    />
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Duration</label>
-                    <select style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                      value={formData.duration_minutes}
-                      onChange={e => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })}>
-                      <option value="0">All Day</option>
-                      <option value="15">15 min</option>
-                      <option value="30">30 min</option>
-                      <option value="45">45 min</option>
-                      <option value="60">1 hour</option>
-                      <option value="90">1.5 hours</option>
-                      <option value="120">2 hours</option>
-                      <option value="180">3 hours</option>
-                      <option value="240">4 hours</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Type</label>
-                    <select style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                      value={formData.event_type}
-                      onChange={e => setFormData({ ...formData, event_type: e.target.value as EditableEventType })}>
-                      {(Object.entries(EVENT_TYPE_LABELS) as [EditableEventType, string][]).map(([key, label]) => (
-                        <option key={key} value={key}>{label}</option>
-                      ))}
-                    </select>
-                  </div>
+
+                <div className="form-group">
+                  <label className="form-label">Duration (minutes)</label>
+                  <select
+                    className="form-input"
+                    value={formData.duration_minutes}
+                    onChange={e => setFormData(prev => ({ ...prev, duration_minutes: Number(e.target.value) }))}
+                  >
+                    <option value={15}>15 min</option>
+                    <option value={30}>30 min</option>
+                    <option value={60}>1 hour</option>
+                    <option value={90}>1.5 hours</option>
+                    <option value={120}>2 hours</option>
+                    <option value={180}>3 hours</option>
+                    <option value={240}>4 hours</option>
+                  </select>
                 </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Location</label>
-                  <input style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+
+                <div className="form-group">
+                  <label className="form-label">Property (optional)</label>
+                  <select
+                    className="form-input"
+                    value={formData.property_id}
+                    onChange={e => setFormData(prev => ({ ...prev, property_id: e.target.value }))}
+                  >
+                    <option value="">— None —</option>
+                    {properties.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.address}{p.unit_number ? ` ${p.unit_number}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Location</label>
+                  <input
+                    className="form-input"
+                    type="text"
                     value={formData.location}
-                    onChange={e => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="Location" />
+                    onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="e.g., 150 East 61st St, Unit 8C"
+                  />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Contact Name</label>
-                    <input style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                      value={formData.contact_name}
-                      onChange={e => setFormData({ ...formData, contact_name: e.target.value })}
-                      placeholder="Contact name" />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Contact Phone</label>
-                    <input style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                      value={formData.contact_phone}
-                      onChange={e => setFormData({ ...formData, contact_phone: e.target.value })}
-                      placeholder="Phone" />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>Description</label>
-                  <textarea style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box', minHeight: 60, resize: 'vertical' }}
+
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <textarea
+                    className="form-input"
+                    rows={3}
                     value={formData.description}
-                    onChange={e => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Details..." />
+                    onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Any notes about this event..."
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label">Contact Name</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      value={formData.contact_name}
+                      onChange={e => setFormData(prev => ({ ...prev, contact_name: e.target.value }))}
+                      placeholder="Contractor name"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Contact Phone</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      value={formData.contact_phone}
+                      onChange={e => setFormData(prev => ({ ...prev, contact_phone: e.target.value }))}
+                      placeholder="(212) 555-..."
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="modal-footer" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid var(--border)' }}>
-                <button type="button" className="filter-btn" onClick={() => setShowForm(false)}>Cancel</button>
-                <button type="submit" style={{
-                  padding: '8px 20px', borderRadius: 8, border: 'none',
-                  background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer'
-                }}>
-                  {editingEvent ? 'Update Event' : 'Add Event'}
-                </button>
-              </div>
-            </form>
+            </div>
+            <div className="modal-footer" style={{ justifyContent: 'flex-end' }}>
+              <button className="btn" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleSave}
+                disabled={!formData.title.trim()}
+              >
+                Create Event
+              </button>
+            </div>
           </div>
         </div>
       )}
