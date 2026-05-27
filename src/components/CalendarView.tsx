@@ -84,7 +84,9 @@ export function CalendarView() {
           for (const e of gcalEvents) {
             const start = e.start?.dateTime || e.start?.date || ''
             const dateOnly = start.includes('T') ? start.split('T')[0] : start
-            const timeStr = start.includes('T') ? start.split('T')[1]?.substring(0, 5) : ''
+            const timeStr = e.start?.dateTime
+              ? new Date(e.start.dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
+              : ''
             const isAllDay = !!e.start?.date && !e.start?.dateTime
             const isMultiDay = isAllDay && e.end?.date && e.end.date !== e.start?.date
 
