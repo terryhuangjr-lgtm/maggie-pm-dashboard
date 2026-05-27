@@ -257,13 +257,20 @@ export function CalendarView() {
     const start = ev.start?.dateTime || ev.start?.date || ''
     const dateOnly = start.includes('T') ? start.split('T')[0] : start
     const timeOnly = start.includes('T') ? start.split('T')[1]?.substring(0, 5) : ''
+
+    // Compute actual duration from start/end
+    let duration = 60
+    if (ev.start?.dateTime && ev.end?.dateTime) {
+      duration = Math.round((new Date(ev.end.dateTime).getTime() - new Date(ev.start.dateTime).getTime()) / 60000)
+    }
+
     setFormData({
       title: ev.summary || ev.title || '',
       description: ev.description || '',
       event_type: 'appointment',
       event_date: dateOnly || '',
       event_time: timeOnly || '09:00',
-      duration_minutes: 60,
+      duration_minutes: duration,
       property_id: '',
       location: ev.location || '',
       contact_name: '',
