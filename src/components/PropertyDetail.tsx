@@ -514,13 +514,51 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         <div className="card">
           <div className="card-header">
             <h3>Lease</h3>
-            <button onClick={() => { setEditLease(null); setShowLeaseForm(true) }} style={{
-              background: 'none', border: '1px solid var(--border)', borderRadius: 6,
-              padding: '4px 8px', color: 'var(--text-secondary)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 4, fontSize: 11
-            }}>
-              <Plus size={12} /> New Lease
-            </button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {lease && isAdmin && (
+                <>
+                  <button onClick={() => { setEditLease(lease); setShowLeaseForm(true) }} style={{
+                    border: '1px solid var(--accent)', borderRadius: 4,
+                    color: 'var(--accent)', cursor: 'pointer',
+                    fontSize: 11, padding: '4px 8px',
+                    background: 'transparent'
+                  }}>
+                    <Pencil size={12} style={{ marginRight: 3 }} /> Edit
+                  </button>
+                  <button onClick={() => {
+                    const end = new Date(lease.lease_end)
+                    const newStart = new Date(end.getTime() + 24*60*60*1000)
+                    const newEnd = new Date(newStart.getTime() + 365*24*60*60*1000)
+                    setRenewPreset({
+                      tenant_id: lease.tenant_id || '',
+                      lease_start: newStart.toISOString().split('T')[0],
+                      lease_end: newEnd.toISOString().split('T')[0],
+                      monthly_rent: String(lease.monthly_rent || ''),
+                      security_deposit: String(lease.security_deposit || ''),
+                      rent_due_day: String(lease.rent_due_day || '1'),
+                      auto_renew: true,
+                      status: 'active',
+                      notes: '',
+                    })
+                    setShowRenewLeaseForm(true)
+                  }} style={{
+                    border: '1px solid var(--accent)', borderRadius: 4,
+                    color: 'var(--accent)', cursor: 'pointer',
+                    fontSize: 11, padding: '4px 8px',
+                    background: 'transparent'
+                  }}>
+                    <FileText size={12} style={{ marginRight: 3 }} /> Renew
+                  </button>
+                </>
+              )}
+              <button onClick={() => { setEditLease(null); setShowLeaseForm(true) }} style={{
+                background: 'none', border: '1px solid var(--accent)', borderRadius: 6,
+                padding: '4px 8px', color: 'var(--accent)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4, fontSize: 11
+              }}>
+                <Plus size={12} /> New Lease
+              </button>
+            </div>
           </div>
           <div className="card-body">
             {lease ? (
@@ -530,33 +568,6 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                   <div className="detail-field-label">Monthly Rent</div>
                   <div className="detail-field-value" style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>
                     ${Number(lease.monthly_rent).toLocaleString()}/mo
-                    <button onClick={() => { setEditLease(lease); setShowLeaseForm(true) }} style={{
-                      border: '1px solid var(--accent)', borderRadius: 4,
-                      color: 'var(--accent)', cursor: 'pointer',
-                      marginLeft: 8, fontSize: 11, padding: '2px 6px',
-                      background: 'transparent'
-                    }}>Edit</button>
-                    <button onClick={() => {
-                      const end = new Date(lease.lease_end)
-                      const newStart = new Date(end.getTime() + 24*60*60*1000)
-                      const newEnd = new Date(newStart.getTime() + 365*24*60*60*1000)
-                      setRenewPreset({
-                        tenant_id: lease.tenant_id || '',
-                        lease_start: newStart.toISOString().split('T')[0],
-                        lease_end: newEnd.toISOString().split('T')[0],
-                        monthly_rent: String(lease.monthly_rent || ''),
-                        security_deposit: String(lease.security_deposit || ''),
-                        rent_due_day: String(lease.rent_due_day || '1'),
-                        auto_renew: true,
-                        status: 'active',
-                        notes: '',
-                      })
-                      setShowRenewLeaseForm(true)
-                    }} style={{
-                      background: 'none', border: '1px solid var(--accent)', borderRadius: 4,
-                      color: 'var(--accent)', cursor: 'pointer',
-                      marginLeft: 8, fontSize: 11, padding: '2px 6px'
-                    }}>Renew</button>
                   </div>
                 </div>
                 )}
