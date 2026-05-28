@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { Modal } from './ui/Modal'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts'
 import { DollarSign, TrendingUp, TrendingDown, Plus, FileText, ShieldAlert, ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 
@@ -104,10 +105,13 @@ export function FinancialReports() {
 
   // Filter data
   const isYtd = selectedMonth === '__ytd__'
+  const currentMonthNum = new Date().getMonth() + 1  // 1-based (Jan=1, May=5)
   const filtered = pnlData.filter(r => {
     if (selectedProperty !== 'all' && r.property_id !== selectedProperty) return false
     if (isYtd) {
       if (!r.month_key.startsWith(selectedYear)) return false
+      const monthNum = parseInt(r.month_key.split('-')[1], 10)
+      if (monthNum > currentMonthNum) return false  // YTD: only up to current month
     } else if (selectedMonth !== 'all') {
       if (r.month_key !== selectedMonth) return false
     }
@@ -138,6 +142,19 @@ export function FinancialReports() {
   const ownerExpenses = totals.maintenance + totals.taxes + totals.insurance + totals.utilities + totals.cc + totals.other
   const netToOwner = totals.income - totals.mgmt - ownerExpenses
   const isOwner = viewMode === 'owner'
+
+  // Group by month for the chart
+  const chartData = useMemo(() => {
+    const byMonth = filtered.reduce((acc, r) => {
+      if (!acc[r.month_key]) acc[r.month_key] = { name: r.month_key, income: 0, expenses: 0, mgmt: 0 }
+      acc[r.month_key].income += Number(r.rental_income)
+      acc[r.month_key].expenses += (Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense))
+      acc[r.month_key].mgmt += Number(r.mgmt_fee_expense)
+      return acc
+    }, {} as Record<string, any>)
+    
+    return Object.values(byMonth).sort((a: any, b: any) => a.name.localeCompare(b.name))
+  }, [filtered])
   function expandProperty(id: string) {
     setExpandedProps(prev => {
       const next = new Set(prev)
@@ -519,6 +536,56 @@ export function FinancialReports() {
         </div>
       )}
 
+
+      {/* Chart Section */}
+      {chartData.length > 0 && (
+        <div className="card" style={{ marginBottom: 24, padding: '24px 24px 12px 24px' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20 }}>
+            {isOwner ? 'Income & Expenses Trend' : 'MHG Revenue Trend'}
+          </h3>
+          <div style={{ width: '100%', height: 280 }}>
+            <ResponsiveContainer>
+              {isOwner ? (
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
+                  <RechartsTooltip
+                    cursor={{ fill: 'var(--bg-secondary)' }}
+                    contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '12px' }}
+                    itemStyle={{ fontSize: 13, padding: '2px 0' }}
+                    labelStyle={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: '4px' }}
+                    formatter={(val: any) => `$${Number(val).toLocaleString()}`}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10 }} iconType="circle" />
+                  <Bar dataKey="income" name="Gross Income" fill="var(--green)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="expenses" name="Owner Expenses" fill="var(--red)" stackId="expenses" radius={[0, 0, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="mgmt" name="Mgmt Fee" fill="var(--accent)" stackId="expenses" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              ) : (
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorMgmt" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
+                  <RechartsTooltip
+                    contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    formatter={(val: any) => `$${Number(val).toLocaleString()}`}
+                    labelStyle={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}
+                  />
+                  <Area type="monotone" dataKey="mgmt" name="MHG Revenue" stroke="var(--accent)" strokeWidth={3} fillOpacity={1} fill="url(#colorMgmt)" />
+                </AreaChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {/* Property P&L Cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {Object.entries(groupedByProperty).length === 0 ? (
@@ -601,30 +668,39 @@ export function FinancialReports() {
 
                               {/* Owner Statement layout */}
                               {isOwner ? (
-                                <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
-                                  <div style={{ color: 'var(--green)', fontWeight: 700, fontSize: 15, marginBottom: 6 }}>
-                                    Gross Rental Income        ${Number(r.rental_income).toLocaleString()}
+                                <div style={{ marginTop: 12, padding: 20, background: 'var(--bg-primary)', borderRadius: 12, border: '1px solid var(--border)' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: 12, marginBottom: 12 }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 15 }}>Gross Rental Income</span>
+                                    <span style={{ fontWeight: 700, color: 'var(--green)', fontSize: 16 }}>${Number(r.rental_income).toLocaleString()}</span>
                                   </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginLeft: 16, marginBottom: 4 }}>
+                                  
+                                  <div style={{ paddingLeft: 12, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                                     {items.map(it => (
-                                      <div key={it.label} style={{
-                                        display: 'flex',
-                                        color: it.isMgmt ? 'var(--accent)' : 'var(--text-secondary)',
-                                        fontWeight: it.isMgmt ? 600 : 400,
-                                      }}>
-                                        <span style={{ width: 140, flexShrink: 0 }}>
-                                          {it.isMgmt ? '—' : '—'} {it.label}
+                                      <div key={it.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: it.isMgmt ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: it.isMgmt ? 600 : 400 }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'currentColor' }} />
+                                          {it.label}
                                         </span>
-                                        <span>   -${it.amount.toLocaleString()}</span>
+                                        <span>-${it.amount.toLocaleString()}</span>
                                       </div>
                                     ))}
+                                    {items.length === 0 && (
+                                      <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No expenses recorded this month.</div>
+                                    )}
                                   </div>
-                                  <div style={{
-                                    borderTop: '1px solid var(--text-secondary)', marginTop: 6, paddingTop: 4,
-                                    fontWeight: 700, color: net >= 0 ? 'var(--green)' : 'var(--red)',
-                                    fontSize: 15
-                                  }}>
-                                    Net to Owner               ${net.toLocaleString()}
+                                  
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--border)', paddingTop: 14, alignItems: 'center' }}>
+                                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 15 }}>Net to Owner</span>
+                                    <div style={{ 
+                                      fontWeight: 700, 
+                                      color: net >= 0 ? 'var(--green)' : 'var(--red)',
+                                      fontSize: 18,
+                                      background: net >= 0 ? 'rgba(39, 174, 96, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+                                      padding: '4px 12px',
+                                      borderRadius: 6
+                                    }}>
+                                      ${net.toLocaleString()}
+                                    </div>
                                   </div>
                                 </div>
                               ) : (
