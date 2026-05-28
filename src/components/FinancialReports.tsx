@@ -623,7 +623,16 @@ export function FinancialReports() {
                 </tr>
               </thead>
               <tbody>
-                {expenses.filter(e => selectedProperty === 'all' || e.property_id === selectedProperty).map((exp, i) => (
+                {expenses.filter(e => {
+                  if (selectedProperty !== 'all' && e.property_id !== selectedProperty) return false
+                  const expMonth = e.date.substring(0, 7) // 'YYYY-MM'
+                  if (isYtd) {
+                    if (!expMonth.startsWith(selectedYear)) return false
+                  } else if (selectedMonth !== 'all') {
+                    if (expMonth !== selectedMonth) return false
+                  }
+                  return true
+                }).map((exp, i) => (
                   <tr key={exp.id || i} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td style={{ padding: '12px 8px' }}>{exp.date}</td>
                     <td style={{ padding: '12px 8px', fontWeight: 600 }}>{properties.find(p => p.id === exp.property_id)?.address || 'Unknown'}</td>
