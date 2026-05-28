@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Modal } from './ui/Modal'
-import { Phone, Mail, Building2, Star, Search, ChevronDown, User, Wrench, HardHat, Shield, Briefcase, Building, Scale, BookOpen, MoreHorizontal, Plus } from 'lucide-react'
+import { Phone, Mail, Building2, Star, Search, ChevronDown, User, Wrench, HardHat, Shield, Briefcase, Building, Scale, BookOpen, MoreHorizontal, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 interface Contact {
   id: string
@@ -74,6 +74,10 @@ export function ContactList() {
   const [properties, setProperties] = useState<PropertyOption[]>([])
   const [saveError, setSaveError] = useState('')
 
+  // Edit contact state
+  const [editingContact, setEditingContact] = useState<Contact | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
+
   // Add contact form state
   const [form, setForm] = useState({
     first_name: '',
@@ -118,6 +122,86 @@ export function ContactList() {
       setProperties(data || [])
     } catch (err) {
       console.error('Failed to load properties:', err)
+    }
+  }
+
+  async function handleDeleteContact() {
+    if (!showDeleteConfirm) return
+    try {
+      const { error } = await supabase.from('contacts').delete().eq('id', showDeleteConfirm)
+      if (error) throw error
+      await supabase.from('activity_log').insert({
+        action: 'Contact deleted',
+        details: `Deleted contact (id: ${showDeleteConfirm})`,
+        source: 'manual',
+      })
+      setShowDeleteConfirm(null)
+      await loadContacts()
+    } catch (err: any) {
+      console.error('Failed to delete contact:', err)
+      alert('Failed to delete contact: ' + (err.message || 'Unknown error'))
+    }
+  }
+
+  function startEdit(c: Contact) {
+    setEditingContact(c)
+    setForm({
+      first_name: c.first_name,
+      last_name: c.last_name,
+      email: c.email || '',
+      phone: c.phone || '',
+      role: c.role,
+      company: c.company || '',
+      property_id: c.property_id || '',
+      language_preference: c.language_preference || 'English',
+      notes: c.notes || '',
+      is_favorite: c.is_favorite || false,
+    })
+  }
+
+  async function handleUpdateContact(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingContact) return
+    setSaveError('')
+
+    try {
+      const payload: any = {
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        role: form.role,
+        language_preference: form.language_preference,
+        is_favorite: form.is_favorite,
+        updated_at: new Date().toISOString(),
+      }
+      if (form.email) payload.email = form.email.trim()
+      else payload.email = null
+      if (form.phone) payload.phone = form.phone.trim()
+      else payload.phone = null
+      if (form.company) payload.company = form.company.trim()
+      else payload.company = null
+      if (form.property_id) payload.property_id = form.property_id
+      else payload.property_id = null
+      if (form.notes) payload.notes = form.notes.trim()
+      else payload.notes = null
+
+      const { error } = await supabase.from('contacts').update(payload).eq('id', editingContact.id)
+      if (error) throw error
+
+      await supabase.from('activity_log').insert({
+        action: 'Contact updated',
+        details: `Updated contact: ${form.first_name} ${form.last_name} (${ROLE_LABELS[form.role] || form.role})`,
+        source: 'manual',
+      })
+
+      setEditingContact(null)
+      setForm({
+        first_name: '', last_name: '', email: '', phone: '',
+        role: 'tenant', company: '', property_id: '',
+        language_preference: 'English', notes: '', is_favorite: false,
+      })
+      await loadContacts()
+    } catch (err: any) {
+      setSaveError(err.message || 'Failed to update contact')
     }
   }
 
@@ -385,6 +469,27 @@ export function ContactList() {
                           <div style={{ marginTop: 2, color: 'var(--text-secondary)' }}>{c.notes}</div>
                         </div>
                       )}
+                      {/* Action buttons */}
+                      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                        <button onClick={(e) => { e.stopPropagation(); startEdit(c); }}
+                          style={{
+                            padding: '6px 14px', borderRadius: 6, border: '1px solid var(--accent)',
+                            background: 'transparent', color: 'var(--accent)', fontSize: 12,
+                            fontWeight: 500, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 5,
+                          }}>
+                          <Pencil size={13} /> Edit
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(c.id); }}
+                          style={{
+                            padding: '6px 14px', borderRadius: 6, border: '1px solid var(--red)',
+                            background: 'transparent', color: 'var(--red)', fontSize: 12,
+                            fontWeight: 500, cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 5,
+                          }}>
+                          <Trash2 size={13} /> Delete
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -392,6 +497,124 @@ export function ContactList() {
             </div>
           </div>
         ))
+      )}
+
+      {/* Edit Contact Modal */}
+      <Modal open={editingContact !== null} onClose={() => { setEditingContact(null); setSaveError(''); }} title="Edit Contact" width="520px">
+        <form onSubmit={handleUpdateContact}>
+          {saveError && (
+            <div style={{ color: 'var(--red)', marginBottom: 12, fontSize: 13, padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: 6 }}>
+              {saveError}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>First Name *</label>
+              <input style={fieldStyle} value={form.first_name} onChange={e => set('first_name', e.target.value)} placeholder="John" required />
+            </div>
+            <div>
+              <label style={labelStyle}>Last Name *</label>
+              <input style={fieldStyle} value={form.last_name} onChange={e => set('last_name', e.target.value)} placeholder="Doe" required />
+            </div>
+            <div>
+              <label style={labelStyle}>Email</label>
+              <input style={fieldStyle} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="john@example.com" />
+            </div>
+            <div>
+              <label style={labelStyle}>Phone</label>
+              <input style={fieldStyle} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="(212) 555-0123" />
+            </div>
+            <div>
+              <label style={labelStyle}>Role</label>
+              <select style={fieldStyle} value={form.role} onChange={e => set('role', e.target.value)}>
+                {Object.entries(ROLE_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Company</label>
+              <input style={fieldStyle} value={form.company} onChange={e => set('company', e.target.value)} placeholder="Company name" />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>Property (optional)</label>
+              <select style={fieldStyle} value={form.property_id} onChange={e => set('property_id', e.target.value)}>
+                <option value="">— No property —</option>
+                {properties.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.address}{p.unit_number ? ` #${p.unit_number}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Language</label>
+              <select style={fieldStyle} value={form.language_preference} onChange={e => set('language_preference', e.target.value)}>
+                <option value="English">English</option>
+                <option value="Chinese">Chinese</option>
+                <option value="Chinese / English">Chinese / English</option>
+                <option value="Korean">Korean</option>
+                <option value="Spanish">Spanish</option>
+                <option value="Russian">Russian</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 4 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={form.is_favorite}
+                  onChange={e => set('is_favorite', e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                />
+                Mark as favorite
+              </label>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label style={labelStyle}>Notes</label>
+            <textarea style={{ ...fieldStyle, minHeight: 60, resize: 'vertical' }} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Any notes about this contact..." />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+            <button type="button" className="filter-btn" onClick={() => { setEditingContact(null); setSaveError(''); }}>Cancel</button>
+            <button type="submit" style={{
+              padding: '8px 20px', borderRadius: 8, border: 'none',
+              background: 'var(--accent)', color: '#fff', fontWeight: 600,
+              fontSize: 13, cursor: 'pointer',
+            }}>
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Delete Contact</h3>
+              <button className="filter-btn" onClick={() => setShowDeleteConfirm(null)} style={{ padding: 4 }}>
+                <X size={16} />
+              </button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 20px' }}>
+              Are you sure you want to delete this contact? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="filter-btn" onClick={() => setShowDeleteConfirm(null)}>Cancel</button>
+              <button onClick={handleDeleteContact} style={{
+                padding: '8px 20px', borderRadius: 8, border: 'none',
+                background: 'var(--red)', color: '#fff', fontWeight: 600,
+                fontSize: 13, cursor: 'pointer',
+              }}>
+                Delete Contact
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Add Contact Modal */}
