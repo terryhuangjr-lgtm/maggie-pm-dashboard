@@ -64,6 +64,7 @@ export function FinancialReports() {
   const [properties, setProperties] = useState<Property[]>([])
   const [, setLeases] = useState<LeaseInfo[]>([])
   const [pnlData, setPnlData] = useState<PnLRow[]>([])
+  const [expenses, setExpenses] = useState<any[]>([])
   const [selectedProperty, setSelectedProperty] = useState<string>('all')
   const [selectedYear, setSelectedYear] = useState<string>(currentYear)
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonth)
@@ -80,14 +81,16 @@ export function FinancialReports() {
 
   async function loadData() {
     try {
-      const [propsRes, leasesRes, pnlRes] = await Promise.all([
+      const [propsRes, leasesRes, pnlRes, expRes] = await Promise.all([
         supabase.from('properties').select('id, address, unit_number, monthly_management_fee').order('address'),
         supabase.from('leases').select('property_id, monthly_rent').eq('status', 'active'),
         supabase.from('monthly_pnl').select('*'),
+        supabase.from('expenses').select('*').order('date', { ascending: false }),
       ])
       setProperties(propsRes.data || [])
       setLeases(leasesRes.data || [])
       setPnlData(pnlRes.data || [])
+      setExpenses(expRes.data || [])
     } catch (err) {
       console.error('Failed to load financial data:', err)
     } finally {
@@ -162,6 +165,18 @@ export function FinancialReports() {
       else next.add(id)
       return next
     })
+  }
+
+
+  async function handleDeleteExpense(id: string) {
+    if (!confirm('Are you sure you want to delete this expense?')) return
+    try {
+      const { error } = await supabase.from('expenses').delete().eq('id', id)
+      if (error) throw error
+      await loadData()
+    } catch (err: any) {
+      alert('Failed to delete expense: ' + err.message)
+    }
   }
 
   async function handleAddExpense(e: React.FormEvent) {
@@ -585,6 +600,51 @@ export function FinancialReports() {
           </div>
         </div>
       )}
+
+
+      {/* Recent Expenses List */}
+      <div className="card" style={{ marginBottom: 24, padding: '24px' }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20 }}>
+          Individual Expenses Log
+        </h3>
+        {expenses.length === 0 ? (
+          <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No expenses logged yet.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: 11, letterSpacing: 0.5 }}>
+                  <th style={{ padding: '12px 8px' }}>Date</th>
+                  <th style={{ padding: '12px 8px' }}>Property</th>
+                  <th style={{ padding: '12px 8px' }}>Category</th>
+                  <th style={{ padding: '12px 8px' }}>Description</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'right' }}>Amount</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.filter(e => selectedProperty === 'all' || e.property_id === selectedProperty).map((exp, i) => (
+                  <tr key={exp.id || i} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '12px 8px' }}>{exp.date}</td>
+                    <td style={{ padding: '12px 8px', fontWeight: 600 }}>{properties.find(p => p.id === exp.property_id)?.address || 'Unknown'}</td>
+                    <td style={{ padding: '12px 8px', textTransform: 'capitalize' }}>{exp.category.replace('_', ' ')}</td>
+                    <td style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>{exp.description}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 700, color: 'var(--red)' }}>${Number(exp.amount).toLocaleString()}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                      <button 
+                        onClick={() => handleDeleteExpense(exp.id)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--red)', cursor: 'pointer', padding: '4px 8px', fontSize: 12, fontWeight: 600 }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Property P&L Cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
