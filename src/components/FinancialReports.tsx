@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { Modal } from './ui/Modal'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts'
 import { DollarSign, TrendingUp, TrendingDown, Plus, FileText, ShieldAlert, ChevronDown, ChevronRight, Building2 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 
@@ -63,6 +64,7 @@ export function FinancialReports() {
   const [properties, setProperties] = useState<Property[]>([])
   const [, setLeases] = useState<LeaseInfo[]>([])
   const [pnlData, setPnlData] = useState<PnLRow[]>([])
+  const [expenses, setExpenses] = useState<any[]>([])
   const [selectedProperty, setSelectedProperty] = useState<string>('all')
   const [selectedYear, setSelectedYear] = useState<string>(currentYear)
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonth)
@@ -79,14 +81,16 @@ export function FinancialReports() {
 
   async function loadData() {
     try {
-      const [propsRes, leasesRes, pnlRes] = await Promise.all([
+      const [propsRes, leasesRes, pnlRes, expRes] = await Promise.all([
         supabase.from('properties').select('id, address, unit_number, monthly_management_fee').order('address'),
         supabase.from('leases').select('property_id, monthly_rent').eq('status', 'active'),
         supabase.from('monthly_pnl').select('*'),
+        supabase.from('expenses').select('*').order('date', { ascending: false }),
       ])
       setProperties(propsRes.data || [])
       setLeases(leasesRes.data || [])
       setPnlData(pnlRes.data || [])
+      setExpenses(expRes.data || [])
     } catch (err) {
       console.error('Failed to load financial data:', err)
     } finally {
@@ -104,10 +108,13 @@ export function FinancialReports() {
 
   // Filter data
   const isYtd = selectedMonth === '__ytd__'
+  const currentMonthNum = new Date().getMonth() + 1  // 1-based (Jan=1, May=5)
   const filtered = pnlData.filter(r => {
     if (selectedProperty !== 'all' && r.property_id !== selectedProperty) return false
     if (isYtd) {
       if (!r.month_key.startsWith(selectedYear)) return false
+      const monthNum = parseInt(r.month_key.split('-')[1], 10)
+      if (monthNum > currentMonthNum) return false  // YTD: only up to current month
     } else if (selectedMonth !== 'all') {
       if (r.month_key !== selectedMonth) return false
     }
@@ -138,6 +145,19 @@ export function FinancialReports() {
   const ownerExpenses = totals.maintenance + totals.taxes + totals.insurance + totals.utilities + totals.cc + totals.other
   const netToOwner = totals.income - totals.mgmt - ownerExpenses
   const isOwner = viewMode === 'owner'
+
+  // Group by month for the chart
+  const chartData = useMemo(() => {
+    const byMonth = filtered.reduce((acc, r) => {
+      if (!acc[r.month_key]) acc[r.month_key] = { name: r.month_key, income: 0, expenses: 0, mgmt: 0 }
+      acc[r.month_key].income += Number(r.rental_income)
+      acc[r.month_key].expenses += (Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense))
+      acc[r.month_key].mgmt += Number(r.mgmt_fee_expense)
+      return acc
+    }, {} as Record<string, any>)
+    
+    return Object.values(byMonth).sort((a: any, b: any) => a.name.localeCompare(b.name))
+  }, [filtered])
   function expandProperty(id: string) {
     setExpandedProps(prev => {
       const next = new Set(prev)
@@ -145,6 +165,18 @@ export function FinancialReports() {
       else next.add(id)
       return next
     })
+  }
+
+
+  async function handleDeleteExpense(id: string) {
+    if (!confirm('Are you sure you want to delete this expense?')) return
+    try {
+      const { error } = await supabase.from('expenses').delete().eq('id', id)
+      if (error) throw error
+      await loadData()
+    } catch (err: any) {
+      alert('Failed to delete expense: ' + err.message)
+    }
   }
 
   async function handleAddExpense(e: React.FormEvent) {
@@ -519,6 +551,101 @@ export function FinancialReports() {
         </div>
       )}
 
+
+      {/* Chart Section */}
+      {chartData.length > 0 && (
+        <div className="card" style={{ marginBottom: 24, padding: '24px 24px 12px 24px' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20 }}>
+            {isOwner ? 'Income & Expenses Trend' : 'MHG Revenue Trend'}
+          </h3>
+          <div style={{ width: '100%', height: 280 }}>
+            <ResponsiveContainer>
+              {isOwner ? (
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
+                  <RechartsTooltip
+                    cursor={{ fill: 'var(--bg-secondary)' }}
+                    contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '12px' }}
+                    itemStyle={{ fontSize: 13, padding: '2px 0' }}
+                    labelStyle={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: '4px' }}
+                    formatter={(val: any) => `$${Number(val).toLocaleString()}`}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10 }} iconType="circle" />
+                  <Bar dataKey="income" name="Gross Income" fill="var(--green)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="expenses" name="Owner Expenses" fill="var(--red)" stackId="expenses" radius={[0, 0, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="mgmt" name="Mgmt Fee" fill="var(--accent)" stackId="expenses" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              ) : (
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorMgmt" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
+                  <RechartsTooltip
+                    contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    formatter={(val: any) => `$${Number(val).toLocaleString()}`}
+                    labelStyle={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}
+                  />
+                  <Area type="monotone" dataKey="mgmt" name="MHG Revenue" stroke="var(--accent)" strokeWidth={3} fillOpacity={1} fill="url(#colorMgmt)" />
+                </AreaChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+
+      {/* Recent Expenses List */}
+      <div className="card" style={{ marginBottom: 24, padding: '24px' }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20 }}>
+          Individual Expenses Log
+        </h3>
+        {expenses.length === 0 ? (
+          <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No expenses logged yet.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: 11, letterSpacing: 0.5 }}>
+                  <th style={{ padding: '12px 8px' }}>Date</th>
+                  <th style={{ padding: '12px 8px' }}>Property</th>
+                  <th style={{ padding: '12px 8px' }}>Category</th>
+                  <th style={{ padding: '12px 8px' }}>Description</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'right' }}>Amount</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.filter(e => selectedProperty === 'all' || e.property_id === selectedProperty).map((exp, i) => (
+                  <tr key={exp.id || i} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '12px 8px' }}>{exp.date}</td>
+                    <td style={{ padding: '12px 8px', fontWeight: 600 }}>{properties.find(p => p.id === exp.property_id)?.address || 'Unknown'}</td>
+                    <td style={{ padding: '12px 8px', textTransform: 'capitalize' }}>{exp.category.replace('_', ' ')}</td>
+                    <td style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>{exp.description}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 700, color: 'var(--red)' }}>${Number(exp.amount).toLocaleString()}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                      <button 
+                        onClick={() => handleDeleteExpense(exp.id)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--red)', cursor: 'pointer', padding: '4px 8px', fontSize: 12, fontWeight: 600 }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Property P&L Cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {Object.entries(groupedByProperty).length === 0 ? (
@@ -601,30 +728,39 @@ export function FinancialReports() {
 
                               {/* Owner Statement layout */}
                               {isOwner ? (
-                                <div style={{ fontFamily: 'monospace', fontSize: 13 }}>
-                                  <div style={{ color: 'var(--green)', fontWeight: 700, fontSize: 15, marginBottom: 6 }}>
-                                    Gross Rental Income        ${Number(r.rental_income).toLocaleString()}
+                                <div style={{ marginTop: 12, padding: 20, background: 'var(--bg-primary)', borderRadius: 12, border: '1px solid var(--border)' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: 12, marginBottom: 12 }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 15 }}>Gross Rental Income</span>
+                                    <span style={{ fontWeight: 700, color: 'var(--green)', fontSize: 16 }}>${Number(r.rental_income).toLocaleString()}</span>
                                   </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginLeft: 16, marginBottom: 4 }}>
+                                  
+                                  <div style={{ paddingLeft: 12, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                                     {items.map(it => (
-                                      <div key={it.label} style={{
-                                        display: 'flex',
-                                        color: it.isMgmt ? 'var(--accent)' : 'var(--text-secondary)',
-                                        fontWeight: it.isMgmt ? 600 : 400,
-                                      }}>
-                                        <span style={{ width: 140, flexShrink: 0 }}>
-                                          {it.isMgmt ? '—' : '—'} {it.label}
+                                      <div key={it.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: it.isMgmt ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: it.isMgmt ? 600 : 400 }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'currentColor' }} />
+                                          {it.label}
                                         </span>
-                                        <span>   -${it.amount.toLocaleString()}</span>
+                                        <span>-${it.amount.toLocaleString()}</span>
                                       </div>
                                     ))}
+                                    {items.length === 0 && (
+                                      <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No expenses recorded this month.</div>
+                                    )}
                                   </div>
-                                  <div style={{
-                                    borderTop: '1px solid var(--text-secondary)', marginTop: 6, paddingTop: 4,
-                                    fontWeight: 700, color: net >= 0 ? 'var(--green)' : 'var(--red)',
-                                    fontSize: 15
-                                  }}>
-                                    Net to Owner               ${net.toLocaleString()}
+                                  
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--border)', paddingTop: 14, alignItems: 'center' }}>
+                                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 15 }}>Net to Owner</span>
+                                    <div style={{ 
+                                      fontWeight: 700, 
+                                      color: net >= 0 ? 'var(--green)' : 'var(--red)',
+                                      fontSize: 18,
+                                      background: net >= 0 ? 'rgba(39, 174, 96, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+                                      padding: '4px 12px',
+                                      borderRadius: 6
+                                    }}>
+                                      ${net.toLocaleString()}
+                                    </div>
                                   </div>
                                 </div>
                               ) : (

@@ -135,6 +135,7 @@ export function CalendarView() {
         if (gcalRes.ok) {
           const gcalEvents = await gcalRes.json()
           for (const e of gcalEvents) {
+<<<<<<< HEAD
             const start = e.start?.dateTime || e.start?.date
             if (!start) continue
             const eventDate = start.substring(0, 10)
@@ -148,11 +149,89 @@ export function CalendarView() {
               type: 'appointment' as const,
               property: e.location || '—',
               details: detail
+=======
+            const start = e.start?.dateTime || e.start?.date || ''
+            const dateOnly = start.includes('T') ? start.split('T')[0] : start
+            const timeStr = e.start?.dateTime
+              ? new Date(e.start.dateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
+              : ''
+            const isAllDay = !!e.start?.date && !e.start?.dateTime
+            const isMultiDay = isAllDay && e.end?.date && e.end.date !== e.start?.date
+
+            // Compute date range: for multi-day all-day events, expand to each day
+            const datesToShow: string[] = [dateOnly]
+            if (isMultiDay) {
+              const s = new Date(e.start.date + 'T12:00:00')
+              const en = new Date(e.end.date + 'T12:00:00')
+              // end.date is exclusive in Google Calendar API
+              const cursor = new Date(s)
+              cursor.setDate(cursor.getDate() + 1)
+              while (cursor < en) {
+                datesToShow.push(cursor.toISOString().split('T')[0])
+                cursor.setDate(cursor.getDate() + 1)
+              }
+            }
+
+            // Compute duration from start/end for timed events
+            let durationStr = ''
+            if (e.start?.dateTime && e.end?.dateTime) {
+              const durMs = new Date(e.end.dateTime).getTime() - new Date(e.start.dateTime).getTime()
+              const durMin = Math.round(durMs / 60000)
+              if (durMin >= 60) {
+                const h = Math.floor(durMin / 60)
+                const m = durMin % 60
+                durationStr = m ? `${h}h ${m}m` : `${h}h`
+              } else {
+                durationStr = `${durMin}min`
+              }
+            }
+
+            for (const d of datesToShow) {
+              calEvents.push({
+                id: e.id + (datesToShow.length > 1 ? '_' + d : ''),
+                date: d,
+                label: e.summary || 'Untitled',
+                type: 'appointment',
+                property: e.location || '—',
+                details: isMultiDay
+                  ? `All day (${datesToShow.length} days)`
+                  : isAllDay
+                    ? 'All day'
+                    : (timeStr ? `${timeStr} · ${durationStr}` : durationStr || 'Google Calendar'),
+                _custom: true,
+              _gcalId: e.id,
+              _gcalEvent: e
+>>>>>>> origin/master
             })
           }
         }
       } catch (gcalErr) {
         console.error('Failed to fetch Google Calendar events:', gcalErr)
+      }
+
+      // Custom events from calendar_events table (created via dashboard form)
+      try {
+        const { data: customEvents } = await supabase
+          .from('calendar_events')
+          .select('*')
+          .order('event_date', { ascending: true })
+
+        if (customEvents) {
+          for (const e of customEvents) {
+            if (e.status === 'cancelled') continue
+            const timeStr = e.event_time ? `${e.event_time.substring(0, 5)}` : ''
+            const durationStr = e.duration_minutes ? ` · ${e.duration_minutes}min` : ''
+            calEvents.push({
+              date: e.event_date,
+              label: e.title,
+              type: e.event_type || 'appointment',
+              property: e.location || '—',
+              details: e.description || (timeStr ? `${timeStr}${durationStr}` : durationStr.trim() || '')
+            })
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load custom events:', err)
       }
 
       // Lease expirations
@@ -240,6 +319,7 @@ export function CalendarView() {
       created_by: 'dashboard'
     }
 
+<<<<<<< HEAD
     // Use service key for writes
     const headers: Record<string, string> = {
       'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -250,6 +330,57 @@ export function CalendarView() {
 
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/calendar_events`, {
+=======
+  function openEditEvent(ev: any) {
+    setEditingEvent(ev)
+    const start = ev.start?.dateTime || ev.start?.date || ''
+    const dateOnly = start.includes('T') ? start.split('T')[0] : start
+    const timeOnly = start.includes('T') ? start.split('T')[1]?.substring(0, 5) : ''
+
+    // Compute actual duration from start/end
+    let duration = 60
+    if (ev.start?.dateTime && ev.end?.dateTime) {
+      duration = Math.round((new Date(ev.end.dateTime).getTime() - new Date(ev.start.dateTime).getTime()) / 60000)
+    }
+
+    setFormData({
+      title: ev.summary || ev.title || '',
+      description: ev.description || '',
+      event_type: 'appointment',
+      event_date: dateOnly || '',
+      event_time: timeOnly || '09:00',
+      duration_minutes: duration,
+      property_id: '',
+      location: ev.location || '',
+      contact_name: '',
+      contact_phone: ''
+    })
+    setShowForm(true)
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (!formData.title.trim()) return
+
+    const API = import.meta.env.DEV ? 'http://localhost:3000' : ''
+    const duration_minutes = formData.duration_minutes || 60
+
+    try {
+      const body = {
+        title: formData.title,
+        date: formData.event_date,
+        time: formData.event_time || undefined,
+        description: [formData.description, formData.location ? `Location: ${formData.location}` : '', formData.contact_name ? `Contact: ${formData.contact_name} ${formData.contact_phone || ''}` : ''].filter(Boolean).join('\n'),
+        duration_minutes
+      }
+
+      if (editingEvent?._gcalId) {
+        // Update via Google Calendar API — use delete + create for simplicity
+        await fetch(`${API}/api/calendar?id=${editingEvent._gcalId}`, { method: 'DELETE' })
+      }
+
+      const res = await fetch(`${API}/api/calendar`, {
+>>>>>>> origin/master
         method: 'POST',
         headers,
         body: JSON.stringify(payload)

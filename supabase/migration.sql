@@ -63,6 +63,11 @@ CREATE POLICY IF NOT EXISTS "Allow anon insert expenses"
   TO anon
   WITH CHECK (true);
 
+CREATE POLICY IF NOT EXISTS "Allow anon delete expenses"
+  ON expenses FOR DELETE
+  TO anon
+  USING (true);
+
 -- ==========================================
 -- 5. Update monthly_pnl view to include expenses
 -- ==========================================
