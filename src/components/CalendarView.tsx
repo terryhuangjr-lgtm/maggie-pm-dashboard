@@ -38,7 +38,7 @@ export function CalendarView() {
     title: '',
     description: '',
     event_type: 'appointment' as EditableEventType,
-    event_date: new Date().toISOString().split('T')[0],
+    event_date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
     event_time: '09:00',
     duration_minutes: 60,
     property_id: '',
@@ -51,12 +51,10 @@ export function CalendarView() {
   const month = currentDate.getMonth()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstDayOfWeek = new Date(year, month, 1).getDay()
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) // YYYY-MM-DD in ET
 
   const getLocalDateStr = (d: Date) => {
-    const offset = d.getTimezoneOffset()
-    const local = new Date(d.getTime() - offset * 60000)
-    return local.toISOString().split('T')[0]
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   }
 
   useEffect(() => {
@@ -241,7 +239,7 @@ export function CalendarView() {
       title: '',
       description: '',
       event_type: 'appointment',
-      event_date: new Date().toISOString().split('T')[0],
+      event_date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }),
       event_time: '09:00',
       duration_minutes: 60,
       property_id: '',
