@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Modal } from './ui/Modal'
-import { Phone, Mail, Building2, Star, Search, ChevronDown, User, Wrench, HardHat, Shield, Briefcase, Building, Scale, BookOpen, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
+import { Phone, Mail, Building2, Star, Search, ChevronDown, User, Wrench, HardHat, Shield, Briefcase, Building, Scale, BookOpen, MoreHorizontal, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 interface Contact {
   id: string
@@ -11,9 +11,9 @@ interface Contact {
   phone: string | null
   role: string
   company: string | null
+  property_id: string | null
   property_address: string | null
   property_unit: string | null
-  property_id?: string | null
   language_preference: string
   notes: string | null
   is_favorite: boolean
@@ -62,13 +62,9 @@ const ROLE_ORDER = [
   'handyman', 'plumber', 'electrician',
   'attorney', 'accountant', 'insurance', 'board_member', 'other'
 ]
-
 const allRoles = Object.keys(ROLE_LABELS)
 
 export function ContactList() {
-  const labelStyle = { display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }
-  const fieldStyle = { width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'var(--bg-primary)', color: 'var(--text-primary)' }
-
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -285,12 +281,23 @@ export function ContactList() {
       grouped[role] = roleContacts
     }
   }
-  // Add any roles not in ROLE_ORDER
   for (const c of filtered) {
     if (!grouped[c.role]) grouped[c.role] = []
     if (!grouped[c.role].some(existing => existing.id === c.id)) {
       grouped[c.role].push(c)
     }
+  }
+
+  const fieldStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 12px', borderRadius: 8,
+    border: '1px solid var(--border)', background: 'var(--bg-primary)',
+    color: 'var(--text-primary)', fontSize: 13, outline: 'none',
+    boxSizing: 'border-box', fontFamily: 'var(--font-body)',
+  }
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+    letterSpacing: '0.5px', color: 'var(--text-muted)', marginBottom: 4, display: 'block',
   }
 
   return (
@@ -300,7 +307,7 @@ export function ContactList() {
         <p>Property management directory — owners, tenants, vendors, and more</p>
       </div>
 
-      {/* Search + Filter */}
+      {/* Search + Filter + Add button */}
       <div className="filter-bar">
         <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -341,6 +348,19 @@ export function ContactList() {
             </button>
           )
         })}
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={{
+            marginLeft: 'auto',
+            padding: '8px 16px', borderRadius: 8, border: 'none',
+            background: 'var(--accent)', color: '#fff', fontWeight: 600,
+            fontSize: 13, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Plus size={15} /> Add Contact
+        </button>
       </div>
 
       {/* Contacts by Role */}

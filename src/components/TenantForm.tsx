@@ -19,8 +19,13 @@ export function TenantForm({ propertyId, tenant, onSaved, onCancel }: TenantForm
     emergency_contact_name: tenant?.emergency_contact_name || '',
     emergency_contact_phone: tenant?.emergency_contact_phone || '',
     move_in_date: tenant?.move_in_date || '',
+    move_out_date: tenant?.move_out_date || '',
     status: tenant?.status || 'active',
     notes: tenant?.notes || '',
+    guarantor_name: tenant?.guarantor_name || '',
+    guarantor_phone: tenant?.guarantor_phone || '',
+    guarantor_email: tenant?.guarantor_email || '',
+    guarantor_relationship: tenant?.guarantor_relationship || '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -57,7 +62,12 @@ export function TenantForm({ propertyId, tenant, onSaved, onCancel }: TenantForm
       if (form.emergency_contact_name) data.emergency_contact_name = form.emergency_contact_name
       if (form.emergency_contact_phone) data.emergency_contact_phone = form.emergency_contact_phone
       if (form.move_in_date) data.move_in_date = form.move_in_date
+      if (form.move_out_date) data.move_out_date = form.move_out_date
       if (form.notes) data.notes = form.notes
+      if (form.guarantor_name) data.guarantor_name = form.guarantor_name
+      if (form.guarantor_phone) data.guarantor_phone = form.guarantor_phone
+      if (form.guarantor_email) data.guarantor_email = form.guarantor_email
+      if (form.guarantor_relationship) data.guarantor_relationship = form.guarantor_relationship
 
       if (isEdit) {
         await supabase.from('tenants').update(data).eq('id', tenant.id)
@@ -122,6 +132,12 @@ export function TenantForm({ propertyId, tenant, onSaved, onCancel }: TenantForm
           <label style={labelStyle}>Move In Date</label>
           <input style={fieldStyle} type="date" value={form.move_in_date} onChange={e => set('move_in_date', e.target.value)} />
         </div>
+        {(form.status === 'former' || tenant?.status === 'former') && (
+          <div>
+            <label style={labelStyle}>Move Out Date</label>
+            <input style={fieldStyle} type="date" value={form.move_out_date} onChange={e => set('move_out_date', e.target.value)} />
+          </div>
+        )}
         <div>
           <label style={labelStyle}>Emergency Contact</label>
           <input style={fieldStyle} value={form.emergency_contact_name} onChange={e => set('emergency_contact_name', e.target.value)} placeholder="Name" />
@@ -129,6 +145,28 @@ export function TenantForm({ propertyId, tenant, onSaved, onCancel }: TenantForm
         <div>
           <label style={labelStyle}>Emergency Phone</label>
           <input style={fieldStyle} value={form.emergency_contact_phone} onChange={e => set('emergency_contact_phone', e.target.value)} placeholder="Phone" />
+        </div>
+      </div>
+
+      <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '16px 0' }} />
+      <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--text-secondary)' }}>Guarantor / Co-Signer</h4>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          <label style={labelStyle}>Guarantor Name</label>
+          <input style={fieldStyle} value={form.guarantor_name} onChange={e => set('guarantor_name', e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>Relationship</label>
+          <input style={fieldStyle} value={form.guarantor_relationship} onChange={e => set('guarantor_relationship', e.target.value)} placeholder="Parent, Employer, etc." />
+        </div>
+        <div>
+          <label style={labelStyle}>Guarantor Phone</label>
+          <input style={fieldStyle} value={form.guarantor_phone} onChange={e => set('guarantor_phone', e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>Guarantor Email</label>
+          <input style={fieldStyle} type="email" value={form.guarantor_email} onChange={e => set('guarantor_email', e.target.value)} />
         </div>
       </div>
 

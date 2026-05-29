@@ -10,9 +10,11 @@ interface TaskFormProps {
 }
 
 const taskTypes = [
-  'lease_renewal', 'rent_collection', 'maintenance_request',
-  'inspection', 'board_application', 'move_in', 'move_out',
-  'owner_report', 'general', 'follow_up'
+  'repairs', 'inspection', 'lease_renewal',
+  'payment_followup', 'lease_break', 'tenant_move_in',
+  'tenant_move_out', 'rent_followup', 'emergency',
+  'bookkeeping', 'general', 'owner_report',
+  'cleaning', 'lease_signing'
 ]
 
 export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskFormProps) {
@@ -164,7 +166,12 @@ export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskF
 
       <div style={{ marginTop: 12 }}>
         <label style={labelStyle}>Assigned To</label>
-        <input style={fieldStyle} value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)} placeholder="Contractor, Maggie, etc." />
+        <select style={fieldStyle} value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}>
+          <option value="">— Unassigned —</option>
+          <option value="Maggie">Maggie</option>
+          <option value="James">James</option>
+          <option value="Jenna">Jenna</option>
+        </select>
       </div>
 
       <div style={{ marginTop: 12 }}>
