@@ -7,6 +7,7 @@ import { TaskList } from './components/TaskList'
 import { CalendarView } from './components/CalendarView'
 import { ContactList } from './components/ContactList'
 import { FinancialReports } from './components/FinancialReports'
+import { HelpGuide } from './components/HelpGuide'
 import { LoginPage } from './components/LoginPage'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import './styles/index.css'
@@ -72,6 +73,7 @@ function AppContent() {
             </div>
           )
         )}
+        {activeView === 'help' && <HelpGuide />}
       </main>
     </div>
   )

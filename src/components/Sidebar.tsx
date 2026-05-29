@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutDashboard, Building2, ListTodo, Calendar, BookOpen, DollarSign, LogOut, ShieldCheck, KeyRound } from 'lucide-react'
+import { LayoutDashboard, Building2, ListTodo, Calendar, BookOpen, DollarSign, LogOut, ShieldCheck, KeyRound, HelpCircle } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { ChangePasswordModal } from './ChangePasswordModal'
 
@@ -20,6 +20,7 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
     { id: 'tasks', label: 'Tasks', icon: ListTodo },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     ...(isAdmin ? [{ id: 'reports', label: 'Reports', icon: DollarSign }] : []),
+    { id: 'help', label: 'Help Guide', icon: HelpCircle },
   ]
 
   return (
