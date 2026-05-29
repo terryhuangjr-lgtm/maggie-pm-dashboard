@@ -201,7 +201,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
           <div className="card-header">
             <h3>Lease Expirations — Next 90 Days</h3>
           </div>
-          <div className="card-body">
+          <div className="card-body" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             {data.upcomingExpirations.length === 0 ? (
               <div className="empty-state"><CheckCircle /> <p>No leases expiring soon</p></div>
             ) : (
@@ -247,7 +247,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
           <div className="card-header">
             <h3>Rent Status — This Month</h3>
           </div>
-          <div className="card-body">
+          <div className="card-body" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <div className="stats-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', marginBottom: 16 }}>
               <StatCard label="Paid" value={data.paymentsReceived} icon={<CheckCircle />} iconBg="rgba(16, 185, 129, 0.15)" />
               <StatCard label="Pending" value={data.paymentsPending} icon={<Clock />} iconBg="rgba(245, 158, 11, 0.15)" />
@@ -331,7 +331,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
           <div className="card-header">
             <h3>Open Tasks by Priority</h3>
           </div>
-          <div className="card-body">
+          <div className="card-body" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             {data.openTasksList.length === 0 ? (
               <div className="empty-state"><CheckCircle /> <p>No open tasks</p></div>
             ) : (
@@ -372,7 +372,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
           <div className="card-header">
             <h3>Recent Activity</h3>
           </div>
-          <div className="card-body">
+          <div className="card-body" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             {data.recentActivity.length === 0 ? (
               <div className="empty-state"><Clock /> <p>No recent activity</p></div>
             ) : (

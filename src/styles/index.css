@@ -196,6 +196,124 @@ body {
   cursor: not-allowed;
 }
 
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fafafa 0%, #f0ede8 100%);
+  padding: 24px;
+}
+
+.login-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.login-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.login-logo span {
+  font-family: var(--font-heading);
+  font-size: 28px;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+}
+
+.login-logo svg {
+  color: var(--accent);
+}
+
+.login-header h1 {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.login-header p {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  transition: border-color 0.15s;
+}
+
+.login-field:focus-within {
+  border-color: var(--accent);
+}
+
+.login-field svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.login-field input {
+  border: none;
+  background: none;
+  outline: none;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.login-field input::placeholder {
+  color: var(--text-muted);
+}
+
+.login-error {
+  background: rgba(192, 57, 43, 0.06);
+  border: 1px solid rgba(192, 57, 43, 0.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--red);
+  text-align: center;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 12px !important;
+  font-size: 14px !important;
+  justify-content: center !important;
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Sidebar footer */
 .sidebar-footer {
   margin-top: auto;

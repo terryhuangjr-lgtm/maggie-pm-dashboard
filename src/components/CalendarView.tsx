@@ -395,7 +395,7 @@ export function CalendarView() {
             </div>
           </div>
           <div className="card-body" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, minWidth: 420 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4, minWidth: 420 }}>
               {dayNames.map(d => (
                 <div key={d} style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', padding: '10px 0' }}>
                   {d}
