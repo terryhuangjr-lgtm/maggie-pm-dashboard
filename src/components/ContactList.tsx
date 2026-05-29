@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-<<<<<<< HEAD
-import { Phone, Mail, Building2, Star, Search, ChevronDown, User, Wrench, HardHat, Shield, Briefcase, Building, Scale, BookOpen, MoreHorizontal } from 'lucide-react'
-=======
 import { Modal } from './ui/Modal'
-import { Phone, Mail, Building2, Star, Search, ChevronDown, User, Wrench, HardHat, Shield, Briefcase, Building, Scale, BookOpen, MoreHorizontal, Plus, Pencil, Trash2, X } from 'lucide-react'
->>>>>>> origin/master
+import { Phone, Mail, Building2, Star, Search, ChevronDown, User, Wrench, HardHat, Shield, Briefcase, Building, Scale, BookOpen, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react'
 
 interface Contact {
   id: string
@@ -17,11 +13,18 @@ interface Contact {
   company: string | null
   property_address: string | null
   property_unit: string | null
+  property_id?: string | null
   language_preference: string
   notes: string | null
   is_favorite: boolean
   status: string
   created_at: string
+}
+
+interface PropertyOption {
+  id: string
+  address: string
+  unit_number: string | null
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -63,13 +66,14 @@ const ROLE_ORDER = [
 const allRoles = Object.keys(ROLE_LABELS)
 
 export function ContactList() {
+  const labelStyle = { display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }
+  const fieldStyle = { width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 14, background: 'var(--bg-primary)', color: 'var(--text-primary)' }
+
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedRole, setSelectedRole] = useState<string | null>(null)
   const [expandedContact, setExpandedContact] = useState<string | null>(null)
-<<<<<<< HEAD
-=======
   const [showAddModal, setShowAddModal] = useState(false)
   const [properties, setProperties] = useState<PropertyOption[]>([])
   const [saveError, setSaveError] = useState('')
@@ -91,10 +95,10 @@ export function ContactList() {
     notes: '',
     is_favorite: false,
   })
->>>>>>> origin/master
 
   useEffect(() => {
     loadContacts()
+    loadProperties()
   }, [])
 
   async function loadContacts() {
@@ -113,8 +117,6 @@ export function ContactList() {
     }
   }
 
-<<<<<<< HEAD
-=======
   async function loadProperties() {
     try {
       const { data } = await supabase
@@ -263,7 +265,6 @@ export function ContactList() {
     setForm({ ...form, [field]: value })
   }
 
->>>>>>> origin/master
   const filtered = contacts.filter(c => {
     const matchRole = !selectedRole || c.role === selectedRole
     if (!search) return matchRole
@@ -477,8 +478,6 @@ export function ContactList() {
           </div>
         ))
       )}
-<<<<<<< HEAD
-=======
 
       {/* Edit Contact Modal */}
       <Modal open={editingContact !== null} onClose={() => { setEditingContact(null); setSaveError(''); }} title="Edit Contact" width="520px">
@@ -688,7 +687,6 @@ export function ContactList() {
           </div>
         </form>
       </Modal>
->>>>>>> origin/master
     </div>
   )
 }

@@ -9,6 +9,9 @@ interface CalendarEvent {
   type: 'lease_expiry' | 'rent_due' | 'task_due' | 'inspection' | 'appointment' | 'meeting' | 'showing' | 'maintenance'
   property: string
   details?: string
+  _custom?: boolean
+  _gcalId?: string
+  _gcalEvent?: any
 }
 
 interface CalendarEventDB {
@@ -56,6 +59,7 @@ const EVENT_TYPE_LABELS: Record<EventFormType, string> = {
 }
 
 export function CalendarView() {
+  const [editingEvent] = useState<any>(null)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [dbEvents, setDbEvents] = useState<CalendarEventDB[]>([])
   const [loading, setLoading] = useState(true)
@@ -135,21 +139,6 @@ export function CalendarView() {
         if (gcalRes.ok) {
           const gcalEvents = await gcalRes.json()
           for (const e of gcalEvents) {
-<<<<<<< HEAD
-            const start = e.start?.dateTime || e.start?.date
-            if (!start) continue
-            const eventDate = start.substring(0, 10)
-            const timeStr = e.start?.dateTime ? new Date(e.start.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' }) : 'All day'
-            const endStr = e.end?.dateTime ? new Date(e.end.dateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' }) : ''
-            const detail = endStr ? `${timeStr} - ${endStr}` : timeStr
-            calEvents.push({
-              id: e.id,
-              date: eventDate,
-              label: e.summary || 'Untitled',
-              type: 'appointment' as const,
-              property: e.location || '—',
-              details: detail
-=======
             const start = e.start?.dateTime || e.start?.date || ''
             const dateOnly = start.includes('T') ? start.split('T')[0] : start
             const timeStr = e.start?.dateTime
@@ -201,10 +190,10 @@ export function CalendarView() {
                 _custom: true,
               _gcalId: e.id,
               _gcalEvent: e
->>>>>>> origin/master
             })
           }
         }
+      }
       } catch (gcalErr) {
         console.error('Failed to fetch Google Calendar events:', gcalErr)
       }
@@ -304,60 +293,6 @@ export function CalendarView() {
     }
   }
 
-  async function handleSave() {
-    const payload: any = {
-      title: formData.title,
-      description: formData.description || null,
-      event_type: formData.event_type,
-      event_date: formData.event_date,
-      event_time: formData.event_time || null,
-      duration_minutes: formData.duration_minutes,
-      location: formData.location || null,
-      contact_name: formData.contact_name || null,
-      contact_phone: formData.contact_phone || null,
-      property_id: formData.property_id || null,
-      created_by: 'dashboard'
-    }
-
-<<<<<<< HEAD
-    // Use service key for writes
-    const headers: Record<string, string> = {
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    }
-
-    try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/calendar_events`, {
-=======
-  function openEditEvent(ev: any) {
-    setEditingEvent(ev)
-    const start = ev.start?.dateTime || ev.start?.date || ''
-    const dateOnly = start.includes('T') ? start.split('T')[0] : start
-    const timeOnly = start.includes('T') ? start.split('T')[1]?.substring(0, 5) : ''
-
-    // Compute actual duration from start/end
-    let duration = 60
-    if (ev.start?.dateTime && ev.end?.dateTime) {
-      duration = Math.round((new Date(ev.end.dateTime).getTime() - new Date(ev.start.dateTime).getTime()) / 60000)
-    }
-
-    setFormData({
-      title: ev.summary || ev.title || '',
-      description: ev.description || '',
-      event_type: 'appointment',
-      event_date: dateOnly || '',
-      event_time: timeOnly || '09:00',
-      duration_minutes: duration,
-      property_id: '',
-      location: ev.location || '',
-      contact_name: '',
-      contact_phone: ''
-    })
-    setShowForm(true)
-  }
-
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!formData.title.trim()) return
@@ -380,10 +315,9 @@ export function CalendarView() {
       }
 
       const res = await fetch(`${API}/api/calendar`, {
->>>>>>> origin/master
         method: 'POST',
-        headers,
-        body: JSON.stringify(payload)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       })
 
       if (!res.ok && res.status !== 201) {
