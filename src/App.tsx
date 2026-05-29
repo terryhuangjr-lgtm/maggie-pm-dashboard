@@ -6,9 +6,13 @@ import { PropertyDetail } from './components/PropertyDetail'
 import { TaskList } from './components/TaskList'
 import { CalendarView } from './components/CalendarView'
 import { ContactList } from './components/ContactList'
+import { FinancialReports } from './components/FinancialReports'
+import { LoginPage } from './components/LoginPage'
+import { AuthProvider, useAuth } from './lib/AuthContext'
 import './styles/index.css'
 
-function App() {
+function AppContent() {
+  const { user, loading, profile, showInactivityWarning, dismissInactivityWarning } = useAuth()
   const [activeView, setActiveView] = useState('dashboard')
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
 
@@ -22,8 +26,31 @@ function App() {
     setActiveView('properties')
   }
 
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner" />
+        <p>Loading...</p>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <LoginPage />
+  }
+
+  const isAdmin = profile?.role === 'admin'
+
   return (
     <div className="app-layout">
+      {showInactivityWarning && (
+        <div className="inactivity-warning">
+          <span>Your session will expire in 1 minute due to inactivity.</span>
+          <button onClick={dismissInactivityWarning} className="btn btn-small">
+            Stay Signed In
+          </button>
+        </div>
+      )}
       <Sidebar activeView={activeView} onNavigate={(v) => {
         setActiveView(v)
         setSelectedPropertyId(null)
@@ -37,8 +64,24 @@ function App() {
         {activeView === 'tasks' && <TaskList />}
         {activeView === 'calendar' && <CalendarView />}
         {activeView === 'contacts' && <ContactList />}
+        {activeView === 'reports' && (
+          isAdmin ? <FinancialReports /> : (
+            <div className="access-restricted">
+              <h2>Access Restricted</h2>
+              <p>You do not have permission to view this page.</p>
+            </div>
+          )
+        )}
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 
