@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { StatusBadge } from './ui/StatusBadge'
 import { Modal } from './ui/Modal'
 import { TaskForm } from './TaskForm'
-import { Plus, Clock, CheckCircle, CheckSquare, ArrowUpDown } from 'lucide-react'
+import { Plus, Clock, CheckCircle, CheckSquare, ArrowUpDown, Trash2 } from 'lucide-react'
 
 interface Task {
   id: string
@@ -193,6 +193,21 @@ export function TaskList() {
       loadCompletedTasks()
     } catch (err) {
       console.error('Failed to restore task:', err)
+    }
+  }
+
+  async function deleteTask(taskId: string, title: string) {
+    if (!confirm(`Delete task "${title}"? This cannot be undone.`)) return
+    try {
+      await supabase.from('tasks').delete().eq('id', taskId)
+      await supabase.from('activity_log').insert({
+        action: 'Task deleted',
+        details: `Deleted task: ${title}`,
+        source: 'manual'
+      })
+      loadTasks()
+    } catch (err) {
+      console.error('Failed to delete task:', err)
     }
   }
 
@@ -433,6 +448,19 @@ export function TaskList() {
               <span className={`badge ${t.priority === 'urgent' ? 'badge-red' : t.priority === 'high' ? 'badge-yellow' : t.priority === 'medium' ? 'badge-blue' : 'badge-gray'}`}>
                 {t.priority}
               </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); deleteTask(t.id, t.title) }}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-muted)', padding: '4px', flexShrink: 0,
+                  opacity: 0.5, transition: 'opacity 0.15s'
+                }}
+                onMouseEnter={e => (e.target as HTMLElement).style.opacity = '1'}
+                onMouseLeave={e => (e.target as HTMLElement).style.opacity = '0.5'}
+                title="Delete task"
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
           )
         })}
