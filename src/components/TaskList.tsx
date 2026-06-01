@@ -235,8 +235,8 @@ export function TaskList() {
       const assignee = ((t as any).assigned_to || '').toLowerCase()
       if (!assignee.includes(personFilter.toLowerCase())) return false
     }
-    if (filter === 'overdue' && t.due_date && new Date(t.due_date) >= new Date()) return false
-    if (filter === 'today' && t.due_date && new Date(t.due_date).toDateString() !== new Date().toDateString()) return false
+    if (filter === 'overdue' && t.due_date && new Date(t.due_date + 'T12:00:00') >= new Date()) return false
+    if (filter === 'today' && t.due_date && new Date(t.due_date + 'T12:00:00').toDateString() !== new Date().toDateString()) return false
     return true
   }).filter(t => {
     if (typeFilter === 'all') return true
@@ -283,7 +283,7 @@ export function TaskList() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1>Tasks</h1>
-          <p>{tasks.length} open • {tasks.filter(t => t.priority === 'urgent').length} urgent • {tasks.filter(t => t.due_date && new Date(t.due_date) < new Date()).length} overdue</p>
+          <p>{tasks.length} open • {tasks.filter(t => t.priority === 'urgent').length} urgent • {tasks.filter(t => t.due_date && new Date(t.due_date + 'T12:00:00') < new Date()).length} overdue</p>
         </div>
         <button onClick={() => { setEditTask(null); setShowForm(true) }} style={{
           padding: '8px 16px', borderRadius: 8, border: 'none',
@@ -390,7 +390,7 @@ export function TaskList() {
           </div>
         )}
         {visibleTasks.map(t => {
-          const isOverdue = t.due_date && new Date(t.due_date) < new Date()
+          const isOverdue = t.due_date && new Date(t.due_date + 'T12:00:00') < new Date()
           const isSelected = selectedIds.has(t.id)
           return (
             <div
@@ -439,7 +439,7 @@ export function TaskList() {
                   {t.tenant_name && <span>Tenant: {t.tenant_name}</span>}
                   {t.due_date && (
                     <span style={{ color: isOverdue ? 'var(--red)' : 'inherit', fontWeight: isOverdue ? 600 : 400 }}>
-                      Due: {new Date(t.due_date).toLocaleDateString()}
+                      Due: {new Date(t.due_date + 'T12:00:00').toLocaleDateString()}
                       {isOverdue ? ' (overdue)' : ''}
                     </span>
                   )}
