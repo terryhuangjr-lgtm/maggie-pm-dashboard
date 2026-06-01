@@ -26,3 +26,4 @@ dist-ssr
 .env.*
 
 scripts/supabase_config.sh
+.vercel
