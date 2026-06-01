@@ -69,6 +69,7 @@ export function ContactList() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedRole, setSelectedRole] = useState<string | null>(null)
+  const [selectedProperty, setSelectedProperty] = useState<string | null>(null)
   const [expandedContact, setExpandedContact] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [properties, setProperties] = useState<PropertyOption[]>([])
@@ -263,14 +264,15 @@ export function ContactList() {
 
   const filtered = contacts.filter(c => {
     const matchRole = !selectedRole || c.role === selectedRole
-    if (!search) return matchRole
+    const matchProperty = !selectedProperty || c.property_id === selectedProperty
+    if (!search) return matchRole && matchProperty
     const q = search.toLowerCase()
     const name = `${c.first_name} ${c.last_name}`.toLowerCase()
     const phone = (c.phone || '').toLowerCase()
     const email = (c.email || '').toLowerCase()
     const company = (c.company || '').toLowerCase()
     const notes = (c.notes || '').toLowerCase()
-    return matchRole && (name.includes(q) || phone.includes(q) || email.includes(q) || company.includes(q) || notes.includes(q))
+    return matchRole && matchProperty && (name.includes(q) || phone.includes(q) || email.includes(q) || company.includes(q) || notes.includes(q))
   })
 
   // Group by role
@@ -329,6 +331,22 @@ export function ContactList() {
             }}
           />
         </div>
+        {/* Property filter */}
+        <select
+          value={selectedProperty || ''}
+          onChange={e => setSelectedProperty(e.target.value || null)}
+          style={{
+            padding: '8px 12px', borderRadius: 6,
+            border: '1px solid var(--border)', background: 'var(--bg-card)',
+            color: 'var(--text-primary)', fontSize: 13, outline: 'none',
+            fontFamily: 'var(--font-body)', cursor: 'pointer',
+          }}
+        >
+          <option value="">All Properties</option>
+          {properties.map(p => (
+            <option key={p.id} value={p.id}>{p.address}{p.unit_number ? ` ${p.unit_number}` : ''}</option>
+          ))}
+        </select>
         <button
           className={`filter-btn ${!selectedRole ? 'active' : ''}`}
           onClick={() => setSelectedRole(null)}
