@@ -224,7 +224,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.tenant_phone}</div>
                       </td>
                       {isAdmin && <td>{Number(e.monthly_rent || 0).toLocaleString()}</td>}
-                      <td>{new Date(e.lease_end).toLocaleDateString()}</td>
+                      <td>{new Date(e.lease_end + 'T12:00:00').toLocaleDateString()}</td>
                       <td>
                         <span style={{
                           color: e.days_until_expiry <= 30 ? 'var(--red)' :
@@ -356,8 +356,8 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.task_type?.replace(/_/g, ' ')}</div>
                       </td>
                       <td>{t.address || '—'}</td>
-                      <td style={{ color: t.due_date && new Date(t.due_date) < new Date() && t.status !== 'completed' ? 'var(--red)' : 'inherit' }}>
-                        {t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}
+                      <td style={{ color: t.due_date && new Date(t.due_date + 'T12:00:00') < new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) && t.status !== 'completed' ? 'var(--red)' : 'inherit' }}>
+                        {t.due_date ? new Date(t.due_date + 'T12:00:00').toLocaleDateString() : '—'}
                       </td>
                     </tr>
                   ))}

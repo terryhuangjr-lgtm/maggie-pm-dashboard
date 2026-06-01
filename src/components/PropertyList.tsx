@@ -172,7 +172,7 @@ export function PropertyList({ onViewProperty }: { onViewProperty: (id: string) 
               {lease && (
                 <div className="property-card-sub">
                   <span>Tenant: {lease.tenant_name}</span>
-                  <span>Lease: {new Date(lease.lease_end).toLocaleDateString()}</span>
+                  <span>Lease: {new Date(lease.lease_end + 'T12:00:00').toLocaleDateString()}</span>
                 </div>
               )}
               <div className="property-card-sub" style={{ marginTop: 4 }}>

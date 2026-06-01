@@ -380,26 +380,26 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
             {property.lease_start && (
               <div className="detail-field">
                 <div className="detail-field-label">Lease Start</div>
-                <div className="detail-field-value">{new Date(property.lease_start).toLocaleDateString()}</div>
+                <div className="detail-field-value">{new Date(property.lease_start + 'T12:00:00').toLocaleDateString()}</div>
               </div>
             )}
             {property.lease_end && (
               <div className="detail-field">
                 <div className="detail-field-label">Lease End</div>
                 <div className="detail-field-value" style={{
-                  color: new Date(property.lease_end) < new Date() ? 'var(--red)' :
-                         new Date(property.lease_end) < new Date(Date.now() + 30*24*60*60*1000) ? 'var(--yellow)' : 'inherit',
-                  fontWeight: new Date(property.lease_end) < new Date() ? 600 : 'normal'
+                  color: new Date(property.lease_end + 'T12:00:00') < new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) ? 'var(--red)' :
+                         new Date(property.lease_end + 'T12:00:00') < new Date(Date.now() + 30*24*60*60*1000) ? 'var(--yellow)' : 'inherit',
+                  fontWeight: new Date(property.lease_end + 'T12:00:00') < new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) ? 600 : 'normal'
                 }}>
-                  {new Date(property.lease_end).toLocaleDateString()}
-                  {new Date(property.lease_end) < new Date() ? ' (EXPIRED)' : ''}
+                  {new Date(property.lease_end + 'T12:00:00').toLocaleDateString()}
+                  {new Date(property.lease_end + 'T12:00:00') < new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) ? ' (EXPIRED)' : ''}
                 </div>
               </div>
             )}
             {property.renewal_notice_date && (
               <div className="detail-field">
                 <div className="detail-field-label">Renewal Notice Date</div>
-                <div className="detail-field-value">{new Date(property.renewal_notice_date).toLocaleDateString()}</div>
+                <div className="detail-field-value">{new Date(property.renewal_notice_date + 'T12:00:00').toLocaleDateString()}</div>
               </div>
             )}
             {property.lease_document_url && (
@@ -454,7 +454,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 {tenant.move_in_date && (
                   <div className="detail-field">
                     <div className="detail-field-label">Move In Date</div>
-                    <div className="detail-field-value">{new Date(tenant.move_in_date).toLocaleDateString()}</div>
+                    <div className="detail-field-value">{new Date(tenant.move_in_date + 'T12:00:00').toLocaleDateString()}</div>
                   </div>
                 )}
                 {tenant.emergency_contact_name && (
@@ -466,7 +466,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 {tenant.status === 'former' && tenant.move_out_date && (
                   <div className="detail-field">
                     <div className="detail-field-label">Move Out Date</div>
-                    <div className="detail-field-value" style={{ color: 'var(--red)' }}>{new Date(tenant.move_out_date).toLocaleDateString()}</div>
+                    <div className="detail-field-value" style={{ color: 'var(--red)' }}>{new Date(tenant.move_out_date + 'T12:00:00').toLocaleDateString()}</div>
                   </div>
                 )}
                 {(tenant.guarantor_name || tenant.guarantor_phone || tenant.guarantor_email) && (
@@ -537,7 +537,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                       background: 'transparent'
                     }}>Edit</button>
                     <button onClick={() => {
-                      const end = new Date(lease.lease_end)
+                      const end = new Date(lease.lease_end + 'T12:00:00')
                       const newStart = new Date(end.getTime() + 24*60*60*1000)
                       const newEnd = new Date(newStart.getTime() + 365*24*60*60*1000)
                       setRenewPreset({
@@ -563,7 +563,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 <div className="detail-field">
                   <div className="detail-field-label">Lease Period</div>
                   <div className="detail-field-value">
-                    {new Date(lease.lease_start).toLocaleDateString()} — {new Date(lease.lease_end).toLocaleDateString()}
+                    {new Date(lease.lease_start + 'T12:00:00').toLocaleDateString()} — {new Date(lease.lease_end + 'T12:00:00').toLocaleDateString()}
                   </div>
                 </div>
                 <div className="detail-field">
@@ -583,11 +583,11 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 <div className="detail-field">
                   <div className="detail-field-label">Lease Expires</div>
                   <div className="detail-field-value" style={{
-                    color: new Date(lease.lease_end) < new Date() ? 'var(--red)' :
-                           new Date(lease.lease_end) < new Date(Date.now() + 30*24*60*60*1000) ? 'var(--yellow)' : 'inherit'
+                    color: new Date(lease.lease_end + 'T12:00:00') < new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) ? 'var(--red)' :
+                           new Date(lease.lease_end + 'T12:00:00') < new Date(Date.now() + 30*24*60*60*1000) ? 'var(--yellow)' : 'inherit'
                   }}>
-                    {new Date(lease.lease_end).toLocaleDateString()}
-                    {new Date(lease.lease_end) < new Date() ? ' (EXPIRED)' : ''}
+                    {new Date(lease.lease_end + 'T12:00:00').toLocaleDateString()}
+                    {new Date(lease.lease_end + 'T12:00:00') < new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) ? ' (EXPIRED)' : ''}
                   </div>
                 </div>
 
@@ -599,7 +599,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                     </div>
                     <div className="detail-field">
                       <div className="detail-field-label">Returned Date</div>
-                      <div className="detail-field-value">{new Date(lease.deposit_returned_date).toLocaleDateString()}</div>
+                      <div className="detail-field-value">{new Date(lease.deposit_returned_date + 'T12:00:00').toLocaleDateString()}</div>
                     </div>
                     {lease.deposit_returned_amount && (
                       <div className="detail-field">
@@ -676,7 +676,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 <tbody>
                   {expenses.slice(0, 20).map((e: any) => (
                     <tr key={e.id}>
-                      <td>{e.date ? new Date(e.date).toLocaleDateString() : '—'}</td>
+                      <td>{e.date ? new Date(e.date + 'T12:00:00').toLocaleDateString() : '—'}</td>
                       <td>{e.category?.replace(/_/g, ' ')}</td>
                       <td style={{ fontWeight: 600, color: 'var(--red)' }}>${Number(e.amount || 0).toLocaleString()}</td>
                       <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{e.vendor || '—'}</td>
@@ -827,8 +827,8 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                           opacity: l.status === 'active' ? 1 : 0.6
                         }}>
                           <td style={{ fontWeight: 500 }}>{t ? `${t.first_name} ${t.last_name}` : '—'}</td>
-                          <td>{l.lease_start ? new Date(l.lease_start).toLocaleDateString() : '—'}</td>
-                          <td>{l.lease_end ? new Date(l.lease_end).toLocaleDateString() : '—'}</td>
+                          <td>{l.lease_start ? new Date(l.lease_start + 'T12:00:00').toLocaleDateString() : '—'}</td>
+                          <td>{l.lease_end ? new Date(l.lease_end + 'T12:00:00').toLocaleDateString() : '—'}</td>
                           <td>${Number(l.monthly_rent || 0).toLocaleString()}</td>
                           <td><StatusBadge status={l.status} /></td>
                         </tr>
