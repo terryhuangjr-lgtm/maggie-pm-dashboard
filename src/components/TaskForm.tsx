@@ -34,7 +34,7 @@ export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskF
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const set = (field: string, value: string) => setForm({ ...form, [field]: value })
+  const set = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }))
 
   const filteredTenants = form.property_id
     ? tenants.filter(t => t.property_id === form.property_id)
@@ -144,6 +144,7 @@ export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskF
         <div>
           <label style={labelStyle}>Property</label>
           <select style={fieldStyle} value={form.property_id} onChange={e => {
+            e.stopPropagation()
             set('property_id', e.target.value)
             set('tenant_id', '')
           }}>
@@ -155,7 +156,10 @@ export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskF
         </div>
         <div>
           <label style={labelStyle}>Tenant</label>
-          <select style={fieldStyle} value={form.tenant_id} onChange={e => set('tenant_id', e.target.value)}>
+          <select style={fieldStyle} value={form.tenant_id} onChange={e => {
+            e.stopPropagation()
+            set('tenant_id', e.target.value)
+          }}>
             <option value="">— No tenant —</option>
             {filteredTenants.map(t => (
               <option key={t.id} value={t.id}>{t.first_name} {t.last_name}</option>
@@ -166,7 +170,10 @@ export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskF
 
       <div style={{ marginTop: 12 }}>
         <label style={labelStyle}>Assigned To</label>
-        <select style={fieldStyle} value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}>
+        <select style={fieldStyle} value={form.assigned_to} onChange={e => {
+          e.stopPropagation()
+          set('assigned_to', e.target.value)
+        }}>
           <option value="">— Unassigned —</option>
           <option value="Maggie">Maggie</option>
           <option value="James">James</option>
