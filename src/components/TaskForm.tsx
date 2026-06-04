@@ -178,6 +178,7 @@ export function TaskForm({ properties, tenants, task, onSaved, onCancel }: TaskF
           <option value="Maggie">Maggie</option>
           <option value="James">James</option>
           <option value="Jenna">Jenna</option>
+          <option value="Winnie">Winnie</option>
         </select>
       </div>
 

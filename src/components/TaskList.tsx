@@ -307,6 +307,7 @@ export function TaskList() {
         <button className={`filter-btn ${personFilter === 'maggie' ? 'active' : ''}`} onClick={() => { setPersonFilter('maggie'); setSelectedIds(new Set()) }}>Maggie</button>
         <button className={`filter-btn ${personFilter === 'James' ? 'active' : ''}`} onClick={() => { setPersonFilter('James'); setSelectedIds(new Set()) }}>James</button>
         <button className={`filter-btn ${personFilter === 'Jenna' ? 'active' : ''}`} onClick={() => { setPersonFilter('Jenna'); setSelectedIds(new Set()) }}>Jenna</button>
+        <button className={`filter-btn ${personFilter === 'Winnie' ? 'active' : ''}`} onClick={() => { setPersonFilter('Winnie'); setSelectedIds(new Set()) }}>Winnie</button>
         <button className={`filter-btn ${personFilter === 'all' ? 'active' : ''}`} onClick={() => { setPersonFilter('all'); setSelectedIds(new Set()) }}>All</button>
       </div>
 
@@ -363,7 +364,7 @@ export function TaskList() {
             </button>
             <span style={{ color: 'var(--border)', alignSelf: 'center' }}>|</span>
             <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>Assign to:</span>
-            {['Maggie', 'James', 'Jenna'].map(name => (
+            {['Maggie', 'James', 'Jenna', 'Winnie'].map(name => (
               <button
                 key={name}
                 onClick={() => bulkAssign(name)}
