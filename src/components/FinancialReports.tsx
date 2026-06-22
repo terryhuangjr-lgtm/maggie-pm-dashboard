@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Modal } from './ui/Modal'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts'
-import { DollarSign, TrendingUp, TrendingDown, Plus, FileText, ShieldAlert, ChevronDown, ChevronRight, Building2 } from 'lucide-react'
+import { PaymentForm } from './PaymentForm'
+import { DollarSign, TrendingUp, TrendingDown, Plus, FileText, ShieldAlert, Building2, CheckCircle } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 
 interface Property {
@@ -13,7 +13,9 @@ interface Property {
 }
 
 interface LeaseInfo {
+  id: string
   property_id: string
+  tenant_id: string | null
   monthly_rent: number
 }
 
@@ -34,11 +36,12 @@ interface PnLRow {
 }
 
 const CATEGORIES = [
+  { value: 'common_charges', label: 'Building Fees (Common Charges)' },
+  { value: 'mgmt_fee', label: 'MHG Management Fee' },
   { value: 'maintenance', label: 'Maintenance & Repairs' },
   { value: 'taxes', label: 'Real Estate Taxes' },
   { value: 'insurance', label: 'Insurance' },
-  { value: 'utilities', label: 'Utilities' },
-  { value: 'common_charges', label: 'Common Charges' },
+  { value: 'utilities', label: 'Utilities / Electric' },
   { value: 'other', label: 'Other' },
 ]
 
@@ -62,15 +65,15 @@ export function FinancialReports() {
 
   const [viewMode, setViewMode] = useState<'owner' | 'internal'>('owner')
   const [properties, setProperties] = useState<Property[]>([])
-  const [, setLeases] = useState<LeaseInfo[]>([])
+  const [leases, setLeases] = useState<LeaseInfo[]>([])
   const [pnlData, setPnlData] = useState<PnLRow[]>([])
-  const [expenses, setExpenses] = useState<any[]>([])
   const [selectedProperty, setSelectedProperty] = useState<string>('all')
   const [selectedYear, setSelectedYear] = useState<string>(currentYear)
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonth)
-  const [expandedProps, setExpandedProps] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [showExpenseForm, setShowExpenseForm] = useState(false)
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [paymentLeaseContext, setPaymentLeaseContext] = useState<{propertyId: string, leaseId: string, tenantId: string | null, rent: number} | null>(null)
   const [expenseForm, setExpenseForm] = useState({
     property_id: '', category: 'maintenance', description: '',
     amount: '', expense_date: new Date().toISOString().split('T')[0],
@@ -81,16 +84,14 @@ export function FinancialReports() {
 
   async function loadData() {
     try {
-      const [propsRes, leasesRes, pnlRes, expRes] = await Promise.all([
+      const [propsRes, leasesRes, pnlRes] = await Promise.all([
         supabase.from('properties').select('id, address, unit_number, monthly_management_fee').order('address'),
-        supabase.from('leases').select('property_id, monthly_rent').eq('status', 'active'),
+        supabase.from('leases').select('id, property_id, tenant_id, monthly_rent').eq('status', 'active'),
         supabase.from('monthly_pnl').select('*'),
-        supabase.from('expenses').select('*').order('date', { ascending: false }),
       ])
       setProperties(propsRes.data || [])
       setLeases(leasesRes.data || [])
       setPnlData(pnlRes.data || [])
-      setExpenses(expRes.data || [])
     } catch (err) {
       console.error('Failed to load financial data:', err)
     } finally {
@@ -145,39 +146,6 @@ export function FinancialReports() {
   const ownerExpenses = totals.maintenance + totals.taxes + totals.insurance + totals.utilities + totals.cc + totals.other
   const netToOwner = totals.income - totals.mgmt - ownerExpenses
   const isOwner = viewMode === 'owner'
-
-  // Group by month for the chart
-  const chartData = useMemo(() => {
-    const byMonth = filtered.reduce((acc, r) => {
-      if (!acc[r.month_key]) acc[r.month_key] = { name: r.month_key, income: 0, expenses: 0, mgmt: 0 }
-      acc[r.month_key].income += Number(r.rental_income)
-      acc[r.month_key].expenses += (Number(r.maintenance_cost) + Number(r.tax_expense) + Number(r.insurance_cost) + Number(r.utilities_cost) + Number(r.cc_expense) + Number(r.other_expense))
-      acc[r.month_key].mgmt += Number(r.mgmt_fee_expense)
-      return acc
-    }, {} as Record<string, any>)
-    
-    return Object.values(byMonth).sort((a: any, b: any) => a.name.localeCompare(b.name))
-  }, [filtered])
-  function expandProperty(id: string) {
-    setExpandedProps(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-
-  async function handleDeleteExpense(id: string) {
-    if (!confirm('Are you sure you want to delete this expense?')) return
-    try {
-      const { error } = await supabase.from('expenses').delete().eq('id', id)
-      if (error) throw error
-      await loadData()
-    } catch (err: any) {
-      alert('Failed to delete expense: ' + err.message)
-    }
-  }
 
   async function handleAddExpense(e: React.FormEvent) {
     e.preventDefault()
@@ -489,7 +457,58 @@ export function FinancialReports() {
         </select>
       </div>
 
-      {/* Summary Cards */}
+      {/* Quick Log Panel */}
+      <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Quick Log</span>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select 
+              style={{ ...fieldStyle, width: 200 }}
+              value={paymentLeaseContext?.propertyId || ''}
+              onChange={e => {
+                const propId = e.target.value
+                // Find active lease for this property
+                const l = leases.find((l: any) => l.property_id === propId)
+                setPaymentLeaseContext(propId ? {
+                  propertyId: propId,
+                  leaseId: l?.id || '',
+                  tenantId: l?.tenant_id || null,
+                  rent: Number(l?.monthly_rent || 0)
+                } : null)
+              }}
+            >
+              <option value="">Select property...</option>
+              {properties.map(p => (
+                <option key={p.id} value={p.id}>{p.address} {p.unit_number || ''}</option>
+              ))}
+            </select>
+            <button
+              className="btn btn-primary"
+              style={{ padding: '8px 14px', fontSize: 12 }}
+              disabled={!paymentLeaseContext?.propertyId}
+              onClick={() => setShowPaymentForm(true)}
+            >
+              <CheckCircle size={14} /> Log Rent Income
+            </button>
+            <button
+              style={{
+                padding: '8px 14px', borderRadius: 8, border: '1px solid var(--red)',
+                background: 'transparent', color: 'var(--red)', fontWeight: 600,
+                fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                opacity: paymentLeaseContext?.propertyId ? 1 : 0.4, pointerEvents: paymentLeaseContext?.propertyId ? 'auto' : 'none'
+              }}
+              onClick={() => {
+                if (paymentLeaseContext?.propertyId) {
+                  setExpenseForm(f => ({ ...f, property_id: paymentLeaseContext.propertyId! }))
+                  setShowExpenseForm(true)
+                }
+              }}
+            >
+              <Plus size={14} /> Log Expense
+            </button>
+          </div>
+        </div>
+      </div>
       {isOwner ? (
         <div className="stats-grid" style={{ marginBottom: 24 }}>
           <div className="card">
@@ -552,163 +571,48 @@ export function FinancialReports() {
       )}
 
 
-      {/* Chart Section */}
-      {chartData.length > 0 && (
-        <div className="card" style={{ marginBottom: 24, padding: '24px 24px 12px 24px' }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20 }}>
-            {isOwner ? 'Income & Expenses Trend' : 'MHG Revenue Trend'}
-          </h3>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer>
-              {isOwner ? (
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barGap={2}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
-                  <RechartsTooltip
-                    cursor={{ fill: 'var(--bg-secondary)' }}
-                    contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '12px' }}
-                    itemStyle={{ fontSize: 13, padding: '2px 0' }}
-                    labelStyle={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: '4px' }}
-                    formatter={(val: any) => `$${Number(val).toLocaleString()}`}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 13, paddingTop: 10 }} iconType="circle" />
-                  <Bar dataKey="income" name="Gross Income" fill="var(--green)" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="expenses" name="Owner Expenses" fill="var(--red)" stackId="expenses" radius={[0, 0, 0, 0]} maxBarSize={40} />
-                  <Bar dataKey="mgmt" name="Mgmt Fee" fill="var(--accent)" stackId="expenses" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                </BarChart>
-              ) : (
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorMgmt" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--text-muted)' }} tickFormatter={(val) => `$${val.toLocaleString()}`} />
-                  <RechartsTooltip
-                    contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    formatter={(val: any) => `$${Number(val).toLocaleString()}`}
-                    labelStyle={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}
-                  />
-                  <Area type="monotone" dataKey="mgmt" name="MHG Revenue" stroke="var(--accent)" strokeWidth={3} fillOpacity={1} fill="url(#colorMgmt)" />
-                </AreaChart>
-              )}
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+      {/* Month-by-Month Breakdown */}
+      {selectedProperty !== 'all' ? (
+        /* Single property: detailed month rows */
+        <>
+          {Object.entries(groupedByProperty).length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+              No data for current filters
+            </div>
+          ) : (
+            Object.entries(groupedByProperty).map(([propId, rows]) => {
+              const firstRow = rows[0]
+              const propOwnerExpenses = rows.reduce((acc, r) => acc + calcTotalExpense(r), 0)
+              const propMgmtFee = rows.reduce((acc, r) => acc + Number(r.mgmt_fee_expense), 0)
+              const propIncome = rows.reduce((acc, r) => acc + Number(r.rental_income), 0)
+              const propNet = propIncome - propMgmtFee - propOwnerExpenses
 
-
-      {/* Recent Expenses List */}
-      <div className="card" style={{ marginBottom: 24, padding: '24px' }}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 20 }}>
-          Individual Expenses Log
-        </h3>
-        {expenses.length === 0 ? (
-          <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No expenses logged yet.</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: 11, letterSpacing: 0.5 }}>
-                  <th style={{ padding: '12px 8px' }}>Date</th>
-                  <th style={{ padding: '12px 8px' }}>Property</th>
-                  <th style={{ padding: '12px 8px' }}>Category</th>
-                  <th style={{ padding: '12px 8px' }}>Description</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'right' }}>Amount</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {expenses.filter(e => selectedProperty === 'all' || e.property_id === selectedProperty).map((exp, i) => (
-                  <tr key={exp.id || i} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '12px 8px' }}>{exp.date}</td>
-                    <td style={{ padding: '12px 8px', fontWeight: 600 }}>{properties.find(p => p.id === exp.property_id)?.address || 'Unknown'}</td>
-                    <td style={{ padding: '12px 8px', textTransform: 'capitalize' }}>{exp.category.replace('_', ' ')}</td>
-                    <td style={{ padding: '12px 8px', color: 'var(--text-secondary)' }}>{exp.description}</td>
-                    <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 700, color: 'var(--red)' }}>${Number(exp.amount).toLocaleString()}</td>
-                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                      <button 
-                        onClick={() => handleDeleteExpense(exp.id)}
-                        style={{ background: 'transparent', border: 'none', color: 'var(--red)', cursor: 'pointer', padding: '4px 8px', fontSize: 12, fontWeight: 600 }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Property P&L Cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {Object.entries(groupedByProperty).length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
-            No data for current filters
-          </div>
-        ) : (
-          Object.entries(groupedByProperty).map(([propId, rows]) => {
-            const isExpanded = expandedProps.has(propId)
-            const firstRow = rows[0]
-            const propOwnerExpenses = rows.reduce((acc, r) => acc + calcTotalExpense(r), 0)
-            const propMgmtFee = rows.reduce((acc, r) => acc + Number(r.mgmt_fee_expense), 0)
-            const propIncome = rows.reduce((acc, r) => acc + Number(r.rental_income), 0)
-            const propNet = propIncome - propMgmtFee - propOwnerExpenses
-
-            return (
-              <div key={propId} className="card">
-                {/* Card Header */}
-                <div
-                  style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '14px 16px', cursor: 'pointer',
-                    borderBottom: isExpanded ? '1px solid var(--border)' : 'none'
-                  }}
-                  onClick={() => expandProperty(propId)}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    {isExpanded ? <ChevronDown size={16} style={{ color: 'var(--text-muted)' }} /> : <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />}
-                    <Building2 size={16} style={{ color: 'var(--text-secondary)' }} />
-                    <span style={{ fontWeight: 600, fontSize: 14 }}>
-                      {firstRow.address}{firstRow.unit_number ? ` ${firstRow.unit_number}` : ''}
-                    </span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                      {rows.length} month{rows.length > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                    {!isOwner && propMgmtFee > 0 && (
-                      <span style={{
-                        background: 'var(--green)', color: '#fff', fontSize: 11,
-                        padding: '2px 8px', borderRadius: 6, fontWeight: 600
-                      }}>
-                        MHG Fee: ${propMgmtFee.toLocaleString()}
+              return (
+                <div key={propId} className="card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Building2 size={16} style={{ color: 'var(--text-secondary)' }} />
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>
+                        {firstRow.address}{firstRow.unit_number ? ` ${firstRow.unit_number}` : ''}
                       </span>
-                    )}
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        {isOwner ? 'Gross Rent' : 'Income'}
-                      </div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)' }}>${propIncome.toLocaleString()}</div>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                        {rows.length} month{rows.length > 1 ? 's' : ''}
+                      </span>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        {isOwner ? 'Net to Owner' : 'Owner Net'}
+                    <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Income</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)' }}>${propIncome.toLocaleString()}</div>
                       </div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: propNet >= 0 ? 'var(--green)' : 'var(--red)' }}>${propNet.toLocaleString()}</div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Net</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: propNet >= 0 ? 'var(--green)' : 'var(--red)' }}>${propNet.toLocaleString()}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Expanded content: month-by-month breakdown */}
-                {isExpanded && (
-                  <div className="card-body" style={{ padding: '8px 16px 16px' }}>
+                  {/* Month rows with breakdown */}
+                  <div style={{ padding: '8px 16px 16px' }}>
                     {rows.map((r) => {
                       const mgmt = calcMgmtFee(r)
                       const opexp = calcTotalExpense(r)
@@ -716,27 +620,24 @@ export function FinancialReports() {
                       const items = expenseEntries(r)
 
                       return (
-                        <div key={r.month_key} style={{
-                          padding: '12px 0',
-                          borderBottom: '1px solid var(--border)'
-                        }}>
+                        <div key={r.month_key} style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
                                 {r.month_key}
                               </div>
 
                               {/* Owner Statement layout */}
                               {isOwner ? (
-                                <div style={{ marginTop: 12, padding: 20, background: 'var(--bg-primary)', borderRadius: 12, border: '1px solid var(--border)' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: 12, marginBottom: 12 }}>
-                                    <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 15 }}>Gross Rental Income</span>
-                                    <span style={{ fontWeight: 700, color: 'var(--green)', fontSize: 16 }}>${Number(r.rental_income).toLocaleString()}</span>
+                                <div style={{ padding: 16, background: 'var(--bg-primary)', borderRadius: 12, border: '1px solid var(--border)' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: 10, marginBottom: 10 }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>Gross Rental Income</span>
+                                    <span style={{ fontWeight: 700, color: 'var(--green)', fontSize: 15 }}>${Number(r.rental_income).toLocaleString()}</span>
                                   </div>
                                   
-                                  <div style={{ paddingLeft: 12, display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                                  <div style={{ paddingLeft: 12, display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
                                     {items.map(it => (
-                                      <div key={it.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: it.isMgmt ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: it.isMgmt ? 600 : 400 }}>
+                                      <div key={it.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: it.isMgmt ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: it.isMgmt ? 600 : 400 }}>
                                         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                           <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'currentColor' }} />
                                           {it.label}
@@ -749,16 +650,9 @@ export function FinancialReports() {
                                     )}
                                   </div>
                                   
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--border)', paddingTop: 14, alignItems: 'center' }}>
-                                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 15 }}>Net to Owner</span>
-                                    <div style={{ 
-                                      fontWeight: 700, 
-                                      color: net >= 0 ? 'var(--green)' : 'var(--red)',
-                                      fontSize: 18,
-                                      background: net >= 0 ? 'rgba(39, 174, 96, 0.1)' : 'rgba(231, 76, 60, 0.1)',
-                                      padding: '4px 12px',
-                                      borderRadius: 6
-                                    }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--border)', paddingTop: 12, alignItems: 'center' }}>
+                                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 14 }}>Net to Owner</span>
+                                    <div style={{ fontWeight: 700, color: net >= 0 ? 'var(--green)' : 'var(--red)', fontSize: 16, background: net >= 0 ? 'rgba(39, 174, 96, 0.1)' : 'rgba(231, 76, 60, 0.1)', padding: '3px 10px', borderRadius: 6 }}>
                                       ${net.toLocaleString()}
                                     </div>
                                   </div>
@@ -766,13 +660,13 @@ export function FinancialReports() {
                               ) : (
                                 /* Internal view — flat list */
                                 <div>
-                                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--green)', marginBottom: 8 }}>
+                                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--green)', marginBottom: 6 }}>
                                     ${Number(r.rental_income).toLocaleString()}
                                   </div>
                                   {items.length === 0 ? (
                                     <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No expenses</div>
                                   ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                       {items.map(it => (
                                         <div key={it.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                                           <div style={{ width: 140, color: 'var(--text-muted)', flexShrink: 0 }}>{it.label}</div>
@@ -782,7 +676,7 @@ export function FinancialReports() {
                                     </div>
                                   )}
                                   {(items.length > 0 || mgmt > 0) && (
-                                    <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
+                                    <div style={{ marginTop: 4, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
                                       Total Expenses: ${(mgmt + opexp).toLocaleString()}
                                     </div>
                                   )}
@@ -794,7 +688,7 @@ export function FinancialReports() {
                               <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
                                 {isOwner ? 'Net to Owner' : 'Net'}
                               </div>
-                              <div style={{ fontSize: 20, fontWeight: 700, color: net >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                              <div style={{ fontSize: 18, fontWeight: 700, color: net >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                 ${net.toLocaleString()}
                               </div>
                             </div>
@@ -803,12 +697,60 @@ export function FinancialReports() {
                       )
                     })}
                   </div>
-                )}
-              </div>
-            )
-          })
-        )}
-      </div>
+                </div>
+              )
+            })
+          )}
+        </>
+      ) : (
+        /* All Properties: simple per-property summary table */
+        <div className="card">
+          <div className="card-header"><h3>All Properties — {isYtd ? 'Year to Date' : selectedMonth === 'all' ? 'All Months' : new Date(selectedMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3></div>
+          <div className="card-body" style={{ overflowX: 'auto' }}>
+            {Object.entries(groupedByProperty).length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No data for current filters</div>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Property</th>
+                    <th style={{ textAlign: 'right' }}>Income</th>
+                    <th style={{ textAlign: 'right' }}>{isOwner ? 'Mgmt Fee' : 'MHG Fee'}</th>
+                    <th style={{ textAlign: 'right' }}>Expenses</th>
+                    <th style={{ textAlign: 'right' }}>{isOwner ? 'Net to Owner' : 'Net'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(groupedByProperty).map(([propId, rows]) => {
+                    const propIncome = rows.reduce((acc, r) => acc + Number(r.rental_income), 0)
+                    const propMgmt = rows.reduce((acc, r) => acc + calcMgmtFee(r), 0)
+                    const propExpenses = rows.reduce((acc, r) => acc + calcTotalExpense(r), 0)
+                    const propNet = propIncome - propMgmt - propExpenses
+                    const firstRow = rows[0]
+                    return (
+                      <tr key={propId}>
+                        <td style={{ fontWeight: 500 }}>{firstRow.address}{firstRow.unit_number ? ` ${firstRow.unit_number}` : ''}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--green)' }}>${propIncome.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--accent)' }}>${propMgmt.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', color: 'var(--red)' }}>${propExpenses.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: propNet >= 0 ? 'var(--green)' : 'var(--red)' }}>${propNet.toLocaleString()}</td>
+                      </tr>
+                    )
+                  })}
+                  {/* Totals row */}
+                  <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700, fontSize: 13 }}>
+                    <td>TOTAL</td>
+                    <td style={{ textAlign: 'right', color: 'var(--green)' }}>${totals.income.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', color: 'var(--accent)' }}>${totals.mgmt.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', color: 'var(--red)' }}>${(isOwner ? ownerExpenses : totals.mgmt + ownerExpenses).toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', color: netToOwner >= 0 ? 'var(--green)' : 'var(--red)' }}>${netToOwner.toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Add Expense Modal */}
       <Modal open={showExpenseForm} onClose={() => setShowExpenseForm(false)} title="Add Expense" width="500px">
@@ -866,6 +808,27 @@ export function FinancialReports() {
             }}>Save Expense</button>
           </div>
         </form>
+      </Modal>
+
+      {/* Quick Log Payment Modal */}
+      <Modal open={showPaymentForm} onClose={() => setShowPaymentForm(false)} title="Log Rent Income" width="480px">
+        {paymentLeaseContext && paymentLeaseContext.leaseId ? (
+          <PaymentForm 
+            propertyId={paymentLeaseContext.propertyId}
+            leaseId={paymentLeaseContext.leaseId}
+            tenantId={paymentLeaseContext.tenantId}
+            rentAmount={paymentLeaseContext.rent}
+            onSaved={() => {
+              setShowPaymentForm(false)
+              loadData()
+            }}
+            onCancel={() => setShowPaymentForm(false)}
+          />
+        ) : (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+            No active lease for this property. Create a lease first.
+          </div>
+        )}
       </Modal>
     </div>
   )

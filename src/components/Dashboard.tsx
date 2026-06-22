@@ -37,6 +37,7 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
   })
   const [loading, setLoading] = useState(true)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [showAllPaid, setShowAllPaid] = useState(false)
   const [paymentLeaseContext, setPaymentLeaseContext] = useState<{propertyId: string, leaseId: string, tenantId: string | null, rent: number} | null>(null)
 
   useEffect(() => {
@@ -245,13 +246,19 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
         {/* Rent Status */}
         <div className="card">
           <div className="card-header">
-            <h3>Rent Status — This Month</h3>
+            <h3>Rent Status — {new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}</h3>
           </div>
           <div className="card-body" style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <div className="stats-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', marginBottom: 16 }}>
               <StatCard label="Paid" value={data.paymentsReceived} icon={<CheckCircle />} iconBg="rgba(16, 185, 129, 0.15)" />
               <StatCard label="Pending" value={data.paymentsPending} icon={<Clock />} iconBg="rgba(245, 158, 11, 0.15)" />
               <StatCard label="Late" value={data.paymentsLate} icon={<AlertTriangle />} iconBg="rgba(239, 68, 68, 0.15)" />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input type="checkbox" checked={showAllPaid} onChange={e => setShowAllPaid(e.target.checked)} />
+                Show paid properties
+              </label>
             </div>
             <table className="data-table">
               <thead>
@@ -265,7 +272,9 @@ export function Dashboard(_props: { onViewProperty?: (id: string) => void }) {
                 </tr>
               </thead>
               <tbody>
-                {data.rentStatus.slice(0, 10).map((r: any, i: number) => (
+                {data.rentStatus
+                  .filter(r => showAllPaid || !r.payment_status || r.payment_status !== 'received')
+                  .slice(0, 10).map((r: any, i: number) => (
                   <tr key={i}>
                     <td style={{ fontWeight: 500 }}>{r.address}{r.unit_number ? ` ${r.unit_number}` : ''}</td>
                     <td>{r.tenant_name}</td>

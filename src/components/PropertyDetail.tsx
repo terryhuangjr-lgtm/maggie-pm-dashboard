@@ -514,13 +514,18 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         <div className="card">
           <div className="card-header">
             <h3>Lease</h3>
-            <button onClick={() => { setEditLease(null); setShowLeaseForm(true) }} style={{
-              background: 'none', border: '1px solid var(--border)', borderRadius: 6,
-              padding: '4px 8px', color: 'var(--text-secondary)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 4, fontSize: 11
-            }}>
-              <Plus size={12} /> New Lease
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {tenant ? `${tenant.first_name} ${tenant.last_name}` : '—'}
+              </span>
+              <button onClick={() => { setEditLease(null); setShowLeaseForm(true) }} style={{
+                background: 'none', border: '1px solid var(--border)', borderRadius: 6,
+                padding: '4px 8px', color: 'var(--text-secondary)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4, fontSize: 11
+              }}>
+                <Plus size={12} /> New Lease
+              </button>
+            </div>
           </div>
           <div className="card-body">
             {lease ? (
@@ -799,7 +804,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
         )}
 
         {/* Lease History */}
-        {allLeases.length > 1 && (
+        {allLeases.length > 0 && (
           <div className="card">
             <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => setShowLeaseHistory(!showLeaseHistory)}>
               <h3>Lease History ({allLeases.length})</h3>
@@ -990,11 +995,12 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Category *</label>
               <select name="category" required style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 13 }}>
+                <option value="common_charges">Building Fees (Common Charges)</option>
+                <option value="mgmt_fee">MHG Management Fee</option>
                 <option value="maintenance">Maintenance & Repairs</option>
                 <option value="taxes">Real Estate Taxes</option>
                 <option value="insurance">Insurance</option>
-                <option value="utilities">Utilities</option>
-                <option value="common_charges">Common Charges</option>
+                <option value="utilities">Utilities / Electric</option>
                 <option value="other">Other</option>
               </select>
             </div>
