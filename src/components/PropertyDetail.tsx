@@ -578,7 +578,7 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
                 </div>
                 <div className="detail-field">
                   <div className="detail-field-label">Rent Due Day</div>
-                  <div className="detail-field-value">{lease.rent_due_day}th of each month</div>
+                  <div className="detail-field-value">{lease.rent_due_day}{lease.rent_due_day === 1 ? 'st' : lease.rent_due_day === 2 ? 'nd' : lease.rent_due_day === 3 ? 'rd' : 'th'} of each month</div>
                 </div>
                 {isAdmin && lease.security_deposit && (
                   <div className="detail-field">
