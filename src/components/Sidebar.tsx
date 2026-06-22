@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LayoutDashboard, Building2, ListTodo, Calendar, BookOpen, DollarSign, LogOut, ShieldCheck, KeyRound, HelpCircle } from 'lucide-react'
+import { LayoutDashboard, Building2, ListTodo, Calendar, BookOpen, DollarSign, TrendingUp, LogOut, ShieldCheck, KeyRound, HelpCircle } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { ChangePasswordModal } from './ChangePasswordModal'
 
@@ -11,7 +11,6 @@ interface SidebarProps {
 export function Sidebar({ activeView, onNavigate }: SidebarProps) {
   const { profile, signOut } = useAuth()
   const [showChangePassword, setShowChangePassword] = useState(false)
-  const isAdmin = profile?.role === 'admin'
 
   const navItems = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -19,7 +18,8 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
     { id: 'contacts', label: 'Contacts', icon: BookOpen },
     { id: 'tasks', label: 'Tasks', icon: ListTodo },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
-    ...(isAdmin ? [{ id: 'reports', label: 'Reports', icon: DollarSign }] : []),
+    { id: 'reports', label: 'Reports', icon: DollarSign },
+    { id: 'manager', label: 'Manager', icon: TrendingUp },
     { id: 'help', label: 'Help Guide', icon: HelpCircle },
   ]
 

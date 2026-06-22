@@ -7,13 +7,14 @@ import { TaskList } from './components/TaskList'
 import { CalendarView } from './components/CalendarView'
 import { ContactList } from './components/ContactList'
 import { FinancialReports } from './components/FinancialReports'
+import { ManagerDashboard } from './components/ManagerDashboard'
 import { HelpGuide } from './components/HelpGuide'
 import { LoginPage } from './components/LoginPage'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import './styles/index.css'
 
 function AppContent() {
-  const { user, loading, profile, showInactivityWarning, dismissInactivityWarning } = useAuth()
+  const { user, loading, showInactivityWarning, dismissInactivityWarning } = useAuth()
   const [activeView, setActiveView] = useState('dashboard')
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null)
 
@@ -40,8 +41,6 @@ function AppContent() {
     return <LoginPage />
   }
 
-  const isAdmin = profile?.role === 'admin'
-
   return (
     <div className="app-layout">
       {showInactivityWarning && (
@@ -65,14 +64,8 @@ function AppContent() {
         {activeView === 'tasks' && <TaskList />}
         {activeView === 'calendar' && <CalendarView />}
         {activeView === 'contacts' && <ContactList />}
-        {activeView === 'reports' && (
-          isAdmin ? <FinancialReports /> : (
-            <div className="access-restricted">
-              <h2>Access Restricted</h2>
-              <p>You do not have permission to view this page.</p>
-            </div>
-          )
-        )}
+        {activeView === 'reports' && <FinancialReports />}
+        {activeView === 'manager' && <ManagerDashboard />}
         {activeView === 'help' && <HelpGuide />}
       </main>
     </div>
