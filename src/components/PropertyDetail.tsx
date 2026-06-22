@@ -515,9 +515,6 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           <div className="card-header">
             <h3>Lease</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {tenant ? `${tenant.first_name} ${tenant.last_name}` : '—'}
-              </span>
               <button onClick={() => { setEditLease(null); setShowLeaseForm(true) }} style={{
                 background: 'none', border: '1px solid var(--border)', borderRadius: 6,
                 padding: '4px 8px', color: 'var(--text-secondary)', cursor: 'pointer',
@@ -530,6 +527,14 @@ export function PropertyDetail({ propertyId, onBack }: { propertyId: string, onB
           <div className="card-body">
             {lease ? (
               <>
+                {isAdmin && (
+                <div className="detail-field">
+                  <div className="detail-field-label">Current Tenant</div>
+                  <div className="detail-field-value" style={{ fontWeight: 600 }}>
+                    {tenant ? `${tenant.first_name} ${tenant.last_name}` : '—'}
+                  </div>
+                </div>
+                )}
                 {isAdmin && (
                 <div className="detail-field">
                   <div className="detail-field-label">Monthly Rent</div>
